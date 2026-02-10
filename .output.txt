@@ -1,0 +1,261 @@
+[3/3] Linking CXX executable flux.exe
+Module hello
+  Import std::io
+  Function main -> Void
+    Block
+      Let message : String
+        String("Hello, Flux!")
+      ExprStmt
+        Call
+          Binary(ColonColon)
+            Identifier(io)
+            Identifier(println)
+          Identifier(message)
+Parsed module: hello
+Semantic analysis OK
+Module hello
+  Import std::io
+  Function main -> Void
+    Block
+      Let message : String
+        String("Hello, Flux!")
+      ExprStmt
+        Call
+          Binary(ColonColon)
+            Identifier(io)
+            Identifier(println)
+          Identifier(message)
+      Let mut counter : Int32
+        Number(0)
+      ExprStmt
+        Binary(Assign)
+          Identifier(counter)
+          Binary(Plus)
+            Identifier(counter)
+            Number(1)
+      Const PI : Float64
+        Number(3.14159265358979)
+      Let result : Int32
+        Call
+          Identifier(add)
+          Number(10)
+          Number(20)
+  Function add -> Int32
+    Block
+      Return
+        Binary(Plus)
+          Identifier(a)
+          Identifier(b)
+Parsed module: hello
+Semantic analysis OK
+error: expected type name at 15:15
+Module structs
+  Import std::io
+  Struct Point
+    Field x : Int32
+    Field y : Int32
+  Enum Shape
+    Variant Circle(Float64)
+    Variant Rectangle(Float64, Float64)
+    Variant None
+  Function main -> Void
+    Block
+      Let p : Point
+        Call
+          Binary(ColonColon)
+            Identifier(Point)
+            Identifier(new)
+          Number(10)
+          Number(20)
+      Let mut q : Point
+        StructLiteral(Point)
+          FieldInit x
+            Number(30)
+          FieldInit y
+            Number(40)
+      Let s : Shape
+        Call
+          Binary(ColonColon)
+            Identifier(Shape)
+            Identifier(Circle)
+          Number(5.0)
+  Impl Point
+    Function new -> Point
+      Block
+        Return
+          StructLiteral(Point)
+            FieldInit x
+              Identifier(x)
+            FieldInit y
+              Identifier(y)
+    Function distance -> Float64
+      Block
+        Return
+          Number(0.0)
+Parsed module: structs
+Semantic analysis OK
+Module match_test
+  Import std::io
+  Enum Shape
+    Variant Circle(Float64)
+    Variant Rectangle(Float64, Float64)
+    Variant None
+  Function main -> Void
+    Block
+      Let s : Shape
+        Call
+          Binary(ColonColon)
+            Identifier(Shape)
+            Identifier(Circle)
+          Number(5.0)
+      Match
+        Identifier(s)
+        Arm
+          VariantPattern(Shape::Circle)
+            IdentifierPattern(r)
+          Block
+            ExprStmt
+              Call
+                Binary(ColonColon)
+                  Identifier(io)
+                  Identifier(println)
+                String("Circle")
+        Arm
+          VariantPattern(Shape::Rectangle)
+            IdentifierPattern(w)
+            IdentifierPattern(h)
+          Block
+            ExprStmt
+              Call
+                Binary(ColonColon)
+                  Identifier(io)
+                  Identifier(println)
+                String("Rectangle")
+        Arm
+          VariantPattern(Shape::None)
+          ExprStmt
+            Call
+              Binary(ColonColon)
+                Identifier(io)
+                Identifier(println)
+              String("None")
+        Arm
+          WildcardPattern
+          ExprStmt
+            Call
+              Binary(ColonColon)
+                Identifier(io)
+                Identifier(println)
+              String("Wildcard")
+      Match
+        Number(1)
+        Arm
+          LiteralPattern
+            Number(1)
+          ExprStmt
+            Call
+              Binary(ColonColon)
+                Identifier(io)
+                Identifier(println)
+              String("one")
+        Arm
+          LiteralPattern
+            Number(2)
+          ExprStmt
+            Call
+              Binary(ColonColon)
+                Identifier(io)
+                Identifier(println)
+              String("two")
+        Arm
+          WildcardPattern
+          ExprStmt
+            Call
+              Binary(ColonColon)
+                Identifier(io)
+                Identifier(println)
+              String("many")
+Parsed module: match_test
+Semantic analysis OK
+Module generics_test
+  Import std::io
+  Struct Box<T>
+    Field value : T
+  Function wrap<T> -> Box<T>
+    Block
+      Return
+        Call
+          Binary(ColonColon)
+            Identifier(Box<T>)
+            Identifier(new)
+          Identifier(v)
+  Function main -> Void
+    Block
+      Let b : Box<Int32>
+        Call
+          Binary(ColonColon)
+            Identifier(Box<Int32>)
+            Identifier(new)
+          Number(42)
+      Let v : &Int32
+        Call
+          Binary(Dot)
+            Identifier(b)
+            Identifier(get)
+  Impl<T> Box<T>
+    Function new -> Box<T>
+      Block
+        Return
+          StructLiteral(Box<T>)
+            FieldInit value
+              Identifier(value)
+    Function get -> &T
+      Block
+        Return
+          Unary(Amp)
+            Binary(Dot)
+              Identifier(self)
+              Identifier(value)
+Parsed module: generics_test
+error: use of undeclared identifier 'Box<T>' at 0:0
+Module ownership_test
+  Import std::io
+  Struct Data
+    Field value : Int32
+  Function take_ownership -> Void
+    Block
+      ExprStmt
+        Call
+          Binary(ColonColon)
+            Identifier(io)
+            Identifier(println)
+          String("Took ownership")
+  Function borrow -> Void
+    Block
+      ExprStmt
+        Call
+          Binary(ColonColon)
+            Identifier(io)
+            Identifier(println)
+          String("Borrowed")
+  Function main -> Void
+    Block
+      Let d : Data
+        StructLiteral(Data)
+          FieldInit value
+            Number(42)
+      ExprStmt
+        Call
+          Identifier(borrow)
+          Unary(Amp)
+            Identifier(d)
+      Let d2 : Data
+        Move
+          Identifier(d)
+      ExprStmt
+        Call
+          Identifier(take_ownership)
+          Move
+            Identifier(d2)
+Parsed module: ownership_test
+Semantic analysis OK

@@ -1,0 +1,15 @@
+module hello;
+
+import std::io;
+
+func main() -> Void {
+    let message: String = "Hello, Flux!";
+    io::println(message);
+
+    let result: Int32 = add(10, 20);
+    io::print_int(result);
+}
+
+func add(a: Int32, b: Int32) -> Int32 {
+    return a + b;
+}

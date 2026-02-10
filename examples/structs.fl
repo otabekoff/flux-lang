@@ -1,0 +1,35 @@
+module structs;
+
+import std::io;
+
+struct Point {
+    x: Int32,
+    y: Int32,
+}
+
+impl Point {
+    func new(x: Int32, y: Int32) -> Point {
+        return Point {
+            x: x,
+            y: y,
+        };
+    }
+
+    func distance(self: &Point, other: &Point) -> Float64 {
+        // ...
+        return 0.0;
+    }
+}
+
+enum Shape {
+    Circle(Float64),
+    Rectangle(Float64, Float64),
+    None,
+}
+
+func main() -> Void {
+    let p: Point = Point::new(10, 20);
+    let mut q: Point = Point { x: 30, y: 40 };
+    
+    let s: Shape = Shape::Circle(5.0);
+}

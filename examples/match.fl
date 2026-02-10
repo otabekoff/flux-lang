@@ -1,0 +1,30 @@
+module match_test;
+
+import std::io;
+
+enum Shape {
+    Circle(Float64),
+    Rectangle(Float64, Float64),
+    None,
+}
+
+func main() -> Void {
+    let s: Shape = Shape::Circle(5.0);
+
+    match s {
+        Shape::Circle(r) => {
+            io::println("Circle");
+        },
+        Shape::Rectangle(w, h) => {
+            io::println("Rectangle");
+        },
+        Shape::None => io::println("None"),
+        _ => io::println("Wildcard"),
+    }
+
+    match 1 {
+        1 => io::println("one"),
+        2 => io::println("two"),
+        _ => io::println("many"),
+    }
+}

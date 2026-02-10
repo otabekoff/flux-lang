@@ -1,0 +1,28 @@
+module generics_test;
+
+import std::io;
+
+struct Box<T> {
+    value: T,
+}
+
+impl<T> Box<T> {
+    func new(value: T) -> Box<T> {
+        return Box<T> {
+            value: value,
+        };
+    }
+
+    func get(self: &Box<T>) -> &T {
+        return &self.value;
+    }
+}
+
+func wrap<T>(v: T) -> Box<T> {
+    return Box<T>::new(v);
+}
+
+func main() -> Void {
+    let b: Box<Int32> = Box<Int32>::new(42);
+    let v: &Int32 = b.get();
+}

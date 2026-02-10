@@ -1,0 +1,164 @@
+module comprehensive;
+
+import std::io;
+
+// --- Type Aliases ---
+type Meters = Float64;
+type Score = Int32;
+
+// --- Structs with visibility ---
+struct Point {
+    x: Int32,
+    y: Int32
+}
+
+struct Pair<T> {
+    first: T,
+    second: T
+}
+
+// --- Enums with payloads ---
+enum Option<T> {
+    Some(T),
+    None
+}
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E)
+}
+
+enum Direction {
+    North,
+    South,
+    East,
+    West
+}
+
+// --- Traits ---
+trait Display {
+    func to_string(self) -> String;
+}
+
+trait Printable {
+    func print(self) -> Void;
+}
+
+// --- Functions ---
+func add(a: Int32, b: Int32) -> Int32 {
+    return a + b;
+}
+
+func factorial(n: Int32) -> Int32 {
+    if n <= 1 {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+func main() -> Void {
+    // --- Variable declarations ---
+    let x: Int32 = 42;
+    let mut y: Int32 = 10;
+    const PI: Float64 = 3.14159265358979;
+
+    // --- Arithmetic ---
+    let sum: Int32 = add(x, y);
+    let product: Int32 = x * y;
+
+    // --- Assignment ---
+    y = y + 1;
+
+    // --- Type casting ---
+    let f: Float64 = x as Float64;
+
+    // --- Booleans and logic ---
+    let a: Bool = true;
+    let b: Bool = false;
+
+    if a && !b {
+        io::println("Logic works");
+    }
+
+    // --- While loop ---
+    let mut i: Int32 = 0;
+    while i < 5 {
+        i = i + 1;
+    }
+
+    // --- For loop ---
+    for item in range(0, 10) {
+        io::print_int(item);
+    }
+
+    // --- Loop with break ---
+    let mut count: Int32 = 0;
+    loop {
+        count = count + 1;
+        if count > 10 {
+            break;
+        }
+    }
+
+    // --- Struct literal ---
+    let p: Point = Point { x: 10, y: 20 };
+
+    // --- Enum variant access ---
+    let d: Direction = Direction::North;
+
+    // --- Match on enum ---
+    match d {
+        North => { io::println("Going north"); }
+        South => { io::println("Going south"); }
+        East  => { io::println("Going east"); }
+        West  => { io::println("Going west"); }
+    }
+
+    // --- Match with wildcard ---
+    match x {
+        _ => { io::println("Wildcard"); }
+    }
+
+    // --- Match on bool ---
+    match a {
+        true  => { io::println("true"); }
+        false => { io::println("false"); }
+    }
+
+    // --- Ownership ---
+    let data: Point = Point { x: 1, y: 2 };
+    let moved: Point = move data;
+
+    // --- Borrowing ---
+    let ref_p: &Point = &p;
+
+    // --- Char and string ---
+    let ch: Char = 'A';
+    let msg: String = "Hello, Flux!";
+
+    // --- Numeric literals ---
+    let hex: Int32 = 0xFF;
+    let bin: Int32 = 0b1010;
+    let oct: Int32 = 0o77;
+
+    // --- Function call ---
+    let fact: Int32 = factorial(5);
+    io::print_int(fact);
+}
+
+// --- Impl block ---
+impl Point {
+    func new(x: Int32, y: Int32) -> Point {
+        return Point { x: x, y: y };
+    }
+
+    func distance(self) -> Float64 {
+        return 0.0;
+    }
+}
+
+impl Display for Point {
+    func to_string(self) -> String {
+        return "Point";
+    }
+}

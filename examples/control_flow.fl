@@ -1,0 +1,24 @@
+module control_flow;
+
+import std::io;
+
+func main() -> Void {
+    let mut x: Int32 = 10;
+    
+    if x > 5 {
+        io::println("x is greater than 5");
+    } else {
+        io::println("x is not greater than 5");
+    }
+    
+    let mut i: Int32 = 0;
+    while i < 5 {
+        io::print_int(i);
+        i = i + 1;
+    }
+    
+    let b: Bool = true;
+    if b && true {
+        io::println("b is true and true");
+    }
+}

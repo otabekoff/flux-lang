@@ -1,0 +1,28 @@
+module types_test;
+
+import std::io;
+
+func main() -> Void {
+    let name: String = "Alice";
+    let age: Int32 = 30;
+    let pi: Float64 = 3.14159;
+    let active: Bool = true;
+
+    let mut counter: Int32 = 0;
+    counter = counter + 1;
+
+    const MAX_SIZE: Int32 = 1024;
+    const PI: Float64 = 3.14159265358979;
+
+    let decimal: Int32 = 1_000_000;
+    let hex: Int32 = 0xFF;
+    let binary: Int32 = 0b1010_0011;
+    let octal: Int32 = 0o77;
+
+    let x: Int32 = 42;
+    let y: Float64 = x as Float64;
+    let z: Int64 = x as Int64;
+
+    let c: Char = 'A';
+    let escape: Char = '\n';
+}

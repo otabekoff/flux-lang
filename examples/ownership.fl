@@ -1,0 +1,24 @@
+module ownership_test;
+
+import std::io;
+
+struct Data {
+    value: Int32,
+}
+
+func take_ownership(d: Data) -> Void {
+    io::println("Took ownership");
+}
+
+func borrow(d: &Data) -> Void {
+    io::println("Borrowed");
+}
+
+func main() -> Void {
+    let d: Data = Data { value: 42 };
+    
+    borrow(&d);
+    
+    let d2: Data = move d;
+    take_ownership(move d2);
+}
