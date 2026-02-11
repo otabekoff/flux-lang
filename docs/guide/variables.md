@@ -122,4 +122,4 @@ let y: &Int32 = &x;        // Immutable reference
 let z: &mut Int32 = &mut x; // Mutable reference
 ```
 
-See [Reference Types](/reference_types) for details.
+See [Reference Types](/reference/types) for details.

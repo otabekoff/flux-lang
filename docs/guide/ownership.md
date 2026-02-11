@@ -76,7 +76,7 @@ func example() -> Void {
 
 Flux includes standard smart pointers for heap allocation and sharing:
 
-### Box\<T\>
+### Box&lt;T&gt;
 
 Exclusive ownership on the heap:
 
@@ -84,7 +84,7 @@ Exclusive ownership on the heap:
 let b: Box<Int32> = Box::new(42);
 ```
 
-### Rc\<T\>
+### Rc&lt;T&gt;
 
 Reference counted shared ownership (single-threaded):
 
@@ -93,7 +93,7 @@ let original: Rc<String> = Rc::new("shared");
 let copy: Rc<String> = original.clone();
 ```
 
-### Arc\<T\>
+### Arc&lt;T&gt;
 
 Atomic reference counted shared ownership (thread-safe):
 
