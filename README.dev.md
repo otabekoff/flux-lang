@@ -1,3 +1,107 @@
+# Tagging system info
+
+# 1) Create tag locally
+
+Lightweight tag:
+
+```bash
+git tag v0.1.0
+```
+
+Annotated tag (recommended for releases):
+
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0"
+```
+
+---
+
+# 2) Push tag to remote
+
+Push only this tag:
+
+```bash
+git push origin v0.1.0
+```
+
+Push all tags:
+
+```bash
+git push origin --tags
+```
+
+---
+
+# 3) Check tags
+
+List local tags:
+
+```bash
+git tag
+```
+
+Show tag details:
+
+```bash
+git show v0.1.0
+```
+
+---
+
+# 4) Delete tag (local)
+
+```bash
+git tag -d v0.1.0
+```
+
+---
+
+# 5) Delete tag from remote
+
+```bash
+git push origin --delete v0.1.0
+```
+
+---
+
+# 6) Retag and push again
+
+Full safe workflow:
+
+```bash
+# delete old tag locally
+git tag -d v0.1.0
+
+# delete old tag on remote
+git push origin --delete v0.1.0
+
+# create new tag
+git tag -a v0.1.0 -m "Release v0.1.0"
+
+# push new tag
+git push origin v0.1.0
+```
+
+---
+
+# 7) Tag a specific commit
+
+```bash
+git tag -a v0.1.0 <commit-hash> -m "Release v0.1.0"
+```
+
+Example:
+
+```bash
+git tag -a v0.1.0 3f2a1bc -m "Release v0.1.0"
+```
+
+
+
+
+-------
+
+
 ```bash
 .\cmake-build-debug\flux.exe examples\hello.fl
 ```
