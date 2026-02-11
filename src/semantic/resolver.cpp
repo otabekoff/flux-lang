@@ -299,6 +299,12 @@ Type Resolver::type_of(const ast::Expr& expr) {
             return {TypeKind::Enum, enum_name};
         }
 
+        if (id->name == "None") {
+            Type t(TypeKind::Option, "Option<Unknown>");
+            t.generic_args.push_back(unknown());
+            return t;
+        }
+
         const Symbol* sym = current_scope_->lookup(id->name);
         if (!sym) {
             throw DiagnosticError("use of undeclared identifier '" + id->name + "'", 0, 0);
@@ -524,6 +530,30 @@ Type Resolver::type_of(const ast::Expr& expr) {
             // Fallback
         }
 
+        // Special handling for Option/Result constructors
+        if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
+            if (callee_id->name == "Some" && call->arguments.size() == 1) {
+                Type val_type = type_of(*call->arguments[0]);
+                Type t(TypeKind::Option, "Option<" + val_type.name + ">");
+                t.generic_args.push_back(val_type);
+                return t;
+            }
+            if (callee_id->name == "Ok" && call->arguments.size() == 1) {
+                Type val_type = type_of(*call->arguments[0]);
+                Type t(TypeKind::Result, "Result<" + val_type.name + ", Unknown>");
+                t.generic_args.push_back(val_type);
+                t.generic_args.push_back(unknown());
+                return t;
+            }
+            if (callee_id->name == "Err" && call->arguments.size() == 1) {
+                Type err_type = type_of(*call->arguments[0]);
+                Type t(TypeKind::Result, "Result<Unknown, " + err_type.name + ">");
+                t.generic_args.push_back(unknown());
+                t.generic_args.push_back(err_type);
+                return t;
+            }
+        }
+
         // 2. Check if it's a function type
         if (callee_type.kind == TypeKind::Function) {
             if (call->arguments.size() != callee_type.param_types.size()) {
@@ -641,6 +671,14 @@ void Resolver::resolve(const ast::Module& module) {
     current_scope_->declare({"assert", SymbolKind::Function, false, true, "Void", {"Bool"}});
     current_scope_->declare(
         {"range", SymbolKind::Function, false, true, "Range", {"Int32", "Int32"}});
+
+    // Built-in Option/Result constructors
+    // We declare them so they are found during lookup.
+    // Their actual types are handled specially in type_of() and resolved specifically.
+    current_scope_->declare({"Some", SymbolKind::Function, false, true, "Option<T>", {"T"}});
+    current_scope_->declare({"None", SymbolKind::Variable, false, true, "Option<T>", {}});
+    current_scope_->declare({"Ok", SymbolKind::Function, false, true, "Result<T,E>", {"T"}});
+    current_scope_->declare({"Err", SymbolKind::Function, false, true, "Result<T,E>", {"E"}});
 
     resolve_module(module);
     exit_scope();
@@ -872,9 +910,8 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
             }
         }
 
-        // 3. Enforce compatibility (but allow unknown types to pass)
-        if (init_type != declared_type && init_type.kind != TypeKind::Unknown &&
-            declared_type.kind != TypeKind::Unknown) {
+        // 3. Enforce compatibility
+        if (!are_types_compatible(declared_type, init_type)) {
             throw DiagnosticError("cannot initialize variable '" + let_stmt->name + "' of type '" +
                                       declared_type.name + "' with value of type '" +
                                       init_type.name + "'",
@@ -1044,6 +1081,11 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                 if (is_enum_variant(ip->name)) {
                     seen_enum_variants.insert(ip->name);
                 }
+                // Built-in Option/Result variants
+                if (ip->name == "None" || ip->name == "Some" || ip->name == "Ok" ||
+                    ip->name == "Err") {
+                    seen_enum_variants.insert(ip->name);
+                }
             } else if (const auto* lp =
                            dynamic_cast<const ast::LiteralPattern*>(arm.pattern.get())) {
                 if (const auto* b = dynamic_cast<const ast::BoolExpr*>(lp->literal.get())) {
@@ -1093,6 +1135,22 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                     throw DiagnosticError(
                         "non-exhaustive match on enum '" + subject_type.name + "'", 0, 0);
                 }
+            } else if (subject_type.kind == TypeKind::Option) {
+                // Expect Some and None
+                bool has_some = seen_enum_variants.contains("Some");
+                bool has_none = seen_enum_variants.contains("None");
+                if (!has_some || !has_none) {
+                    throw DiagnosticError("non-exhaustive match on Option (missing Some or None)",
+                                          0, 0);
+                }
+            } else if (subject_type.kind == TypeKind::Result) {
+                // Expect Ok and Err
+                bool has_ok = seen_enum_variants.contains("Ok");
+                bool has_err = seen_enum_variants.contains("Err");
+                if (!has_ok || !has_err) {
+                    throw DiagnosticError("non-exhaustive match on Result (missing Ok or Err)", 0,
+                                          0);
+                }
             } else {
                 throw DiagnosticError("non-exhaustive match (add '_' wildcard arm)", 0, 0);
             }
@@ -1117,7 +1175,8 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
 
         // Built-in identifiers
         if (id->name == "self" || id->name == "Self" || id->name == "drop" || id->name == "panic" ||
-            id->name == "assert") {
+            id->name == "assert" || id->name == "Some" || id->name == "None" || id->name == "Ok" ||
+            id->name == "Err") {
             return;
         }
 
@@ -1213,6 +1272,12 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern) {
             return;
         }
 
+        // Option/Result variants in pattern
+        if (id_pat->name == "None" || id_pat->name == "Some" || id_pat->name == "Ok" ||
+            id_pat->name == "Err") {
+            return;
+        }
+
         // Otherwise: normal variable binding
         if (!current_scope_->declare(
                 {id_pat->name, SymbolKind::Variable, false, true, "Unknown", {}})) {
@@ -1228,8 +1293,10 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern) {
             root = root.substr(0, pos);
         }
         if (!current_scope_->lookup(root) && !is_enum_variant(root)) {
-            throw DiagnosticError("use of undeclared identifier '" + root + "' in variant pattern",
-                                  0, 0);
+            if (root != "Some" && root != "Ok" && root != "Err") {
+                throw DiagnosticError(
+                    "use of undeclared identifier '" + root + "' in variant pattern", 0, 0);
+            }
         }
         for (const auto& sub : var_pat->sub_patterns) {
             resolve_pattern(*sub);
@@ -1285,6 +1352,56 @@ std::string Resolver::promote_integer_name(const std::string& a, const std::stri
     } else {
         return "UInt" + std::to_string(width);
     }
+}
+
+bool Resolver::are_types_compatible(const Type& target, const Type& source) const {
+    if (target.kind == TypeKind::Unknown || source.kind == TypeKind::Unknown) {
+        return true;
+    }
+
+    if (target == source) {
+        return true;
+    }
+
+    // Special handling for Option<T>
+    if (target.kind == TypeKind::Option && source.kind == TypeKind::Option) {
+        // Option<Unknown> (from None) is compatible with any Option<T>
+        if (source.generic_args.empty() || source.generic_args[0].kind == TypeKind::Unknown) {
+            return true;
+        }
+        // Check inner types
+        if (!target.generic_args.empty() && !source.generic_args.empty()) {
+            return are_types_compatible(target.generic_args[0], source.generic_args[0]);
+        }
+    }
+
+    // Special handling for Result<T, E>
+    if (target.kind == TypeKind::Result && source.kind == TypeKind::Result) {
+        // Result<T, Unknown> (from Ok(T)) -> compatible if T matches
+        // Result<Unknown, E> (from Err(E)) -> compatible if E matches
+        bool t_ok = true;
+        bool e_ok = true;
+
+        // Check T
+        if (!target.generic_args.empty() && !source.generic_args.empty()) {
+            // If source T is unknown, it means it's an Err variant, so it matches any T target
+            if (source.generic_args[0].kind != TypeKind::Unknown) {
+                t_ok = are_types_compatible(target.generic_args[0], source.generic_args[0]);
+            }
+        }
+
+        // Check E
+        if (target.generic_args.size() > 1 && source.generic_args.size() > 1) {
+            // If source E is unknown, it means it's an Ok variant, so it matches any E target
+            if (source.generic_args[1].kind != TypeKind::Unknown) {
+                e_ok = are_types_compatible(target.generic_args[1], source.generic_args[1]);
+            }
+        }
+
+        return t_ok && e_ok;
+    }
+
+    return false;
 }
 
 } // namespace flux::semantic

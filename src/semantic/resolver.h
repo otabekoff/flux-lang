@@ -48,6 +48,8 @@ class Resolver {
     int numeric_width(const std::string& name) const;
     std::string promote_integer_name(const std::string& a, const std::string& b) const;
 
+    bool are_types_compatible(const Type& target, const Type& source) const;
+
   private:
     static Type unknown() {
         return {TypeKind::Unknown, "Unknown"};

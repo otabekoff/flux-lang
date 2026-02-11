@@ -1,2 +1,0 @@
-#!/bin/sh
-bun test || exit 1

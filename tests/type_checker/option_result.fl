@@ -1,0 +1,19 @@
+func test_option() -> Void {
+    let x: Option<Int32> = Some(42);
+    let y: Option<Int32> = None;
+
+    match x {
+        Some(v) => {}
+        None => {}
+    }
+}
+
+func test_result() -> Void {
+    let r: Result<Int32, String> = Ok(10);
+    let e: Result<Int32, String> = Err("error");
+
+    match r {
+        Ok(v) => {}
+        Err(msg) => {}
+    }
+}

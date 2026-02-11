@@ -1,0 +1,7 @@
+func test_option_error() -> Void {
+    let x: Option<Int32> = Some(42);
+    match x {
+        Some(v) => {}
+        // Missing None
+    }
+}

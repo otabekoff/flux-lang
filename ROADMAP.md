@@ -410,3 +410,7 @@ Implement the core types and functions referenced in the language spec.
 - [x] All VS Code tasks and launch configs are correct and warning-free
 - [x] Syntax highlighting files are synchronized
 - [x] Documentation and roadmap updated
+
+---
+
+the thing and fat

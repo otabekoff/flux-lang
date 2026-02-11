@@ -137,26 +137,4 @@ C:\Users\marko\AppData\Local\Programs\CLion\bin\cmake\win\x64\bin\cmake.exe --bu
 
 ---
 
-Setup these for our project:
-
-CMake based, multi-platform projects
- By GitHub Actions
-
-CMake based, multi-platform projects logo
-Build and test a CMake based project on multiple platforms.
-
-C
-
-workflow at .github/workflows/cmake-multi-platform.yml.
-
-And the second worflow at .github/workflows/msvc.yml which is:
-
-Microsoft C++ Code Analysis
- By Microsoft
-
-Microsoft C++ Code Analysis logo
-Code Analysis with the Microsoft C & C++ Compiler for CMake based projects.
-
-Code scanning
-
 
