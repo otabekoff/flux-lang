@@ -76,14 +76,21 @@ jobs:
     - name: Stage binary
       shell: bash
       run: |
-        BINARY_NAME="flux"
+        OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+        VERSION="${{ github.ref_name }}"
+        COMPILER="${{ matrix.c_compiler }}"
+        if [ "$COMPILER" == "cl" ]; then COMPILER="msvc"; fi
+
+        # Determine target filename
+        TARGET_NAME="flux-${VERSION}-${OS_NAME}-x86_64-${COMPILER}"
+
         if [ "${{ runner.os }}" == "Windows" ]; then
           BINARY_PATH="${{ steps.strings.outputs.build-output-dir }}/${{ matrix.build_type }}/flux.exe"
-          TARGET_NAME="flux-${{ runner.os }}-${{ matrix.c_compiler }}.exe"
+          TARGET_NAME="${TARGET_NAME}.exe"
         else
           BINARY_PATH="${{ steps.strings.outputs.build-output-dir }}/${{ matrix.build_type }}/flux"
-          TARGET_NAME="flux-${{ runner.os }}-${{ matrix.c_compiler }}"
         fi
+
         mkdir -p staged
         cp "$BINARY_PATH" "staged/$TARGET_NAME"
         echo "target-name=$TARGET_NAME" >> "$GITHUB_OUTPUT"
