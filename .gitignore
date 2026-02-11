@@ -47,4 +47,5 @@ out
 .vitepress/dist
 docs/.vitepress/cache
 docs/.vitepress/dist
-editors/node_modules
+editors/vscode/node_modules/
+
