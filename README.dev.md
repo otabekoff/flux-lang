@@ -2,33 +2,35 @@
 .\cmake-build-debug\flux.exe examples\hello.fl
 ```
 
-
 ## 1️⃣ Decide the error model (important design choice)
 
 There are 3 common approaches:
+
 - std::cerr + exit(1)
 - return std::optional<T>
 - throw an exception
 
 We did 1️⃣ Decide the error model (important design choice)
 There are 3 common approaches:
+
 - std::cerr + exit(1)
 - return std::optional<T>
 - throw an exception
 
 ## Can later add:
+
 - filename
 - source snippet
 - caret (^) display
 
-
 ## 7️⃣ Why this scales perfectly
 
 This diagnostic system will later support:
+
 - syntax errors:
-  ```bash
-  error: expected ';' after expression at 6:14
-  ```
+    ```bash
+    error: expected ';' after expression at 6:14
+    ```
 - type errors:
     ```bash
     error: cannot assign Int32 to String at 8:9
@@ -41,8 +43,7 @@ This diagnostic system will later support:
 Nothing will be rewritten.
 You just add more error producers.
 
-----
-
+---
 
 🔍 Why this dependency is OK (and not a smell)
 
@@ -58,18 +59,15 @@ Later (optional refinement), you may replace:
 
 TokenKind op;
 
-
 with:
 
 enum class BinaryOp { Add, Sub, Mul, Div, Eq, Lt, ... };
-
 
 But not now. That comes during semantic analysis / lowering.
 
 You did the right thing by not overengineering early.
 
-
-----
+---
 
 Pay the technical debts.
 
@@ -97,4 +95,17 @@ But not now — and that’s correct.
 
 ---
 
-Get-ChildItem examples\*.fl | ForEach-Object { $result = & .\cmake-build-debug\flux.exe $_.FullName 2>&1 ; $last = $result | Select-Object -Last 1 ; Write-Host "$($_.Name): $last" }
+Get-ChildItem examples\*.fl | ForEach-Object { $result = & .\cmake-build-debug\flux.exe $_.FullName 2>&1 ; $last = $result | Select-Object -Last 1 ; Write-Host "$($\_.Name): $last" }
+
+---
+
+C:\Users\marko\AppData\Local\Programs\CLion\bin\cmake\win\x64\bin\cmake.exe -- build D:\project\tutorial\flux\cmake-build-debug -- target flux -j 6
+
+---
+
+Create official installers for win, macos/linux.
+
+---
+
+g++ -std=c++20 -I./src -o build/Debug/tuple_test.exe tests/tuple.cpp
+

@@ -1,0 +1,10 @@
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  resolver.cpp
+  flux.vcxproj -> D:\project\tutorial\flux\build\Debug\flux.exe
+  resolver.cpp
+  numeric_tests.vcxproj -> D:\project\tutorial\flux\build\Debug\numeric_tests.exe
+  resolver.cpp
+  struct_field_test.vcxproj -> D:\project\tutorial\flux\build\Debug\struct_field_test.exe
+  resolver.cpp
+  tuple_test.vcxproj -> D:\project\tutorial\flux\build\Debug\tuple_test.exe

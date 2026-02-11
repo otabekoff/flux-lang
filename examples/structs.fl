@@ -30,6 +30,6 @@ enum Shape {
 func main() -> Void {
     let p: Point = Point::new(10, 20);
     let mut q: Point = Point { x: 30, y: 40 };
-    
+
     let s: Shape = Shape::Circle(5.0);
 }

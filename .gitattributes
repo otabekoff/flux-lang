@@ -1,0 +1,20 @@
+# Force LF for text files to avoid CRLF warnings
+* text=auto eol=lf
+
+# Specific rules
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.cmake text eol=lf
+
+# Binary
+*.png binary
+*.jpg binary
+*.exe binary
+*.dll binary
+*.so binary
+*.a binary
