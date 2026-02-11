@@ -26,6 +26,10 @@
             "include": "#types"
         },
         {
+            "name": "punctuation.arrow.flux",
+            "match": "->|=>"
+        },
+        {
             "include": "#constants"
         },
         {
@@ -259,10 +263,6 @@
         },
         "operators": {
             "patterns": [
-                {
-                    "name": "punctuation.definition.arrow.flux",
-                    "match": "->|=>"
-                },
                 {
                     "name": "keyword.operator.comparison.flux",
                     "match": "==|!=|<=|>=|<|>"

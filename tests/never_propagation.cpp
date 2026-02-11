@@ -20,6 +20,7 @@ void test_never_propagation() {
             let y: Float64 = 1.0 + panic("!");
             let z: Bool = !panic("!");
             let t: (Int32, String) = (1, panic("!"));
+            let arr: [Int32; 3] = [1, 2, panic("!")];
 
             bar(panic("!"));
         }

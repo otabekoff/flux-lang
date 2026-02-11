@@ -128,6 +128,27 @@ Type Resolver::type_from_name_internal(const std::string& name,
     }
 
     // Tuple types or Function types
+    if (name.starts_with("[")) {
+        size_t semicolon = name.rfind(';');
+        size_t end = name.rfind(']');
+        if (semicolon != std::string::npos && end != std::string::npos && end > semicolon) {
+            std::string inner = name.substr(1, semicolon - 1);
+            std::string size_str = name.substr(semicolon + 1, end - semicolon - 1);
+            // Trim whitespace from size
+            size_t first = size_str.find_first_not_of(" \t\n");
+            if (first != std::string::npos) {
+                size_t last = size_str.find_last_not_of(" \t\n");
+                size_str = size_str.substr(first, last - first + 1);
+            }
+
+            Type value_type = type_from_name_internal(inner, seen);
+            if (value_type.kind != TypeKind::Unknown) {
+                std::string canonical_name = "[" + value_type.name + ";" + size_str + "]";
+                return {TypeKind::Array, canonical_name};
+            }
+        }
+    }
+
     if (name.starts_with("(")) {
         // Check if it's a function type: contains "->" after the argument list
         // We need to find the matching ')' for the opening '('

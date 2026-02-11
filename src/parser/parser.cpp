@@ -1064,6 +1064,16 @@ std::string Parser::parse_type() {
         return type;
     }
 
+    // Array type: [T; N]
+    if (peek().kind == TokenKind::LBracket) {
+        advance();
+        std::string element_type = parse_type();
+        expect(TokenKind::Semicolon, "expected ';' in array type");
+        Token size_tok = expect(TokenKind::Number, "expected array size");
+        expect(TokenKind::RBracket, "expected ']' after array size");
+        return "[" + element_type + ";" + size_tok.lexeme + "]";
+    }
+
     // Tuple type: (T1, T2, ...)
     if (peek().kind == TokenKind::LParen) {
         advance();
