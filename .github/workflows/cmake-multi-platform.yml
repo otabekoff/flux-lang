@@ -73,8 +73,57 @@ jobs:
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-configuration generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-    - name: Test
-      working-directory: ${{ steps.strings.outputs.build-output-dir }}
-      # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --build-config ${{ matrix.build_type }}
+    - name: Stage binary
+      shell: bash
+      run: |
+        BINARY_NAME="flux"
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          BINARY_PATH="${{ steps.strings.outputs.build-output-dir }}/${{ matrix.build_type }}/flux.exe"
+          TARGET_NAME="flux-${{ runner.os }}-${{ matrix.c_compiler }}.exe"
+        else
+          BINARY_PATH="${{ steps.strings.outputs.build-output-dir }}/flux"
+          TARGET_NAME="flux-${{ runner.os }}-${{ matrix.c_compiler }}"
+        fi
+        mkdir -p staged
+        cp "$BINARY_PATH" "staged/$TARGET_NAME"
+        echo "target-name=$TARGET_NAME" >> "$GITHUB_OUTPUT"
+      id: stage
+
+    - name: Upload binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.stage.outputs.target-name }}
+        path: staged/${{ steps.stage.outputs.target-name }}
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          merge-multiple: true
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run release
