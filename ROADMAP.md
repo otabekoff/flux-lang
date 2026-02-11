@@ -44,7 +44,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Function types / closures** — infer and check lambda/closure types: `|x: Int32| -> Int32 { x + 1 }`.
 - [x] **`Option<T>` and `Result<T, E>`** — built-in generic types with exhaustiveness integration in `match`. (Complete, handles Some/None and Ok/Err)
 - [ ] **`Never` type propagation** — `panic()` and infinite loops produce `Never`; allow `Never` to coerce to any type.
-- [ ] **Type alias resolution** — fully resolve chains: `type A = B; type B = Int32;` → `A` is `Int32`.
+- [x] **Type alias resolution** — fully resolve chains: `type A = B; type B = Int32;` → `A` is `Int32`. Implemented with recursive resolution and cycle detection.
 
 ### 1.2 Generics & Trait Bounds
 
@@ -207,6 +207,8 @@ Implement the core types and functions referenced in the language spec.
 
 ### 5.2 Package Manager (`fluxpkg`)
 
+- [ ] **Go style package manager** — design and code a package manager that is similar to Go's package manager for Flux.
+- [ ] Use `package-manager.md` as starting point
 - [ ] **Manifest file** — `flux.toml` with `[package]`, `[dependencies]`, `[build]` sections.
 - [ ] **Dependency resolution** — fetch and resolve transitive dependencies.
 - [ ] **Version constraints** — semver ranges (e.g., `^1.2.0`, `~0.3`).

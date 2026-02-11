@@ -10,14 +10,31 @@
 #include <unordered_set>
 
 namespace flux::semantic {
+
+struct ScopeGuard {
+    Resolver* res;
+    ScopeGuard(Resolver* r) : res(r) {
+        res->enter_scope();
+    }
+    ~ScopeGuard() {
+        res->exit_scope();
+    }
+};
+
 Type Resolver::type_from_name(const std::string& name) const {
+    std::unordered_set<std::string> seen;
+    return type_from_name_internal(name, seen);
+}
+
+Type Resolver::type_from_name_internal(const std::string& name,
+                                       std::unordered_set<std::string>& seen) const {
     // Option<T> and Result<T,E> types
     if (name.starts_with("Option<")) {
         size_t start = name.find('<');
         size_t end = name.rfind('>');
         if (start != std::string::npos && end != std::string::npos && end > start + 1) {
             std::string inner = name.substr(start + 1, end - start - 1);
-            Type inner_type = type_from_name(inner);
+            Type inner_type = type_from_name_internal(inner, seen);
             Type t(TypeKind::Option, name);
             t.generic_args.push_back(inner_type);
             return t;
@@ -37,8 +54,8 @@ Type Resolver::type_from_name(const std::string& name) const {
                 t1.erase(t1.find_last_not_of(" \t\n") + 1);
                 t2.erase(0, t2.find_first_not_of(" \t\n"));
                 t2.erase(t2.find_last_not_of(" \t\n") + 1);
-                Type type1 = type_from_name(t1);
-                Type type2 = type_from_name(t2);
+                Type type1 = type_from_name_internal(t1, seen);
+                Type type2 = type_from_name_internal(t2, seen);
                 Type t(TypeKind::Result, name);
                 t.generic_args.push_back(type1);
                 t.generic_args.push_back(type2);
@@ -46,30 +63,35 @@ Type Resolver::type_from_name(const std::string& name) const {
             }
         }
     }
-    using semantic::Type;
-    using semantic::TypeKind;
 
     if (name.starts_with("Int") || name.starts_with("UInt") || name == "IntPtr" ||
-        name == "UIntPtr")
-        return {TypeKind::Int, name};
+        name == "UIntPtr") {
+        return Type(TypeKind::Int, name);
+    }
 
-    if (name.starts_with("Float"))
-        return {TypeKind::Float, name};
+    if (name.starts_with("Float")) {
+        return Type(TypeKind::Float, name);
+    }
 
-    if (name == "Bool")
-        return {TypeKind::Bool, name};
+    if (name == "Bool") {
+        return Type(TypeKind::Bool, name);
+    }
 
-    if (name == "String")
-        return {TypeKind::String, name};
+    if (name == "String") {
+        return Type(TypeKind::String, name);
+    }
 
-    if (name == "Char")
-        return {TypeKind::Char, name};
+    if (name == "Char") {
+        return Type(TypeKind::Char, name);
+    }
 
-    if (name == "Void")
-        return {TypeKind::Void, name};
+    if (name == "Void") {
+        return Type(TypeKind::Void, name);
+    }
 
-    if (name == "Never")
-        return {TypeKind::Never, name};
+    if (name == "Never") {
+        return Type(TypeKind::Never, name);
+    }
 
     // Enum types
     if (enum_variants_.contains(name)) {
@@ -83,7 +105,13 @@ Type Resolver::type_from_name(const std::string& name) const {
 
     // Type aliases
     if (type_aliases_.contains(name)) {
-        return type_from_name(type_aliases_.at(name));
+        if (seen.contains(name)) {
+            throw DiagnosticError("circular type alias detected: '" + name + "'", 0, 0);
+        }
+        seen.insert(name);
+        Type resolved = type_from_name_internal(type_aliases_.at(name), seen);
+        seen.erase(name);
+        return resolved;
     }
 
     // Generic types (e.g., Box<Int32>)
@@ -147,7 +175,7 @@ Type Resolver::type_from_name(const std::string& name) const {
                                 param_str = "";
                             }
                             if (!param_str.empty()) {
-                                params.push_back(type_from_name(param_str));
+                                params.push_back(type_from_name_internal(param_str, seen));
                             }
                             start = i + 1;
                         }
@@ -161,7 +189,7 @@ Type Resolver::type_from_name(const std::string& name) const {
                     size_t last = ret_str.find_last_not_of(" \t\n");
                     ret_str = ret_str.substr(first, last - first + 1);
                 }
-                Type ret_type = type_from_name(ret_str);
+                Type ret_type = type_from_name_internal(ret_str, seen);
 
                 return Type(TypeKind::Function, name, false, std::move(params),
                             std::make_unique<Type>(std::move(ret_type)));
@@ -696,7 +724,8 @@ void Resolver::resolve(const ast::Module& module) {
    ======================= */
 
 void Resolver::resolve_module(const ast::Module& module) {
-    enter_scope();
+    ScopeGuard guard(this);
+
     // Declare imports
     for (const auto& imp : module.imports) {
         std::string root_path = imp.module_path;
@@ -711,6 +740,11 @@ void Resolver::resolve_module(const ast::Module& module) {
     for (const auto& ta : module.type_aliases) {
         type_aliases_[ta.name] = ta.target_type;
         current_scope_->declare({ta.name, SymbolKind::Variable, false, true, "Type", {}});
+    }
+
+    // Validate type aliases (catch circular definitions early)
+    for (const auto& ta : module.type_aliases) {
+        type_from_name(ta.name);
     }
 
     // Declare types (structs, enums, classes, traits)
@@ -742,7 +776,6 @@ void Resolver::resolve_module(const ast::Module& module) {
         }
         enum_variants_[e.name] = std::move(vars);
     }
-    exit_scope();
 
     for (const auto& t : module.traits) {
         current_scope_->declare({t.name, SymbolKind::Variable, false, true, "Type", {}});
@@ -799,7 +832,7 @@ void Resolver::resolve_module(const ast::Module& module) {
    ======================= */
 
 void Resolver::resolve_function(const ast::FunctionDecl& fn) {
-    enter_scope(); // function scope
+    ScopeGuard guard(this);
 
     current_function_return_type_ = type_from_name(fn.return_type);
     in_loop_ = false;
@@ -823,8 +856,6 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn) {
                                   current_function_return_type_.name + "'",
                               0, 0);
     }
-
-    exit_scope();
 }
 
 /* =======================
@@ -832,7 +863,7 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn) {
    ======================= */
 
 bool Resolver::resolve_block(const ast::Block& block) {
-    enter_scope(); // block scope
+    ScopeGuard guard(this);
 
     bool always_returns = false;
 
@@ -846,7 +877,6 @@ bool Resolver::resolve_block(const ast::Block& block) {
         }
     }
 
-    exit_scope();
     return always_returns;
 }
 

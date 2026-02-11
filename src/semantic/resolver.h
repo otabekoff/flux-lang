@@ -7,6 +7,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace flux::semantic {
@@ -57,6 +58,10 @@ class Resolver {
 
     // patterns
     void resolve_pattern(const ast::Pattern& pattern);
+
+    // internal recursive version with cycle detection
+    Type type_from_name_internal(const std::string& name,
+                                 std::unordered_set<std::string>& seen) const;
 
   private:
     Scope* current_scope_ = nullptr;
