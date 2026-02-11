@@ -116,9 +116,16 @@ struct ErrorPropagationExpr : Expr {
 };
 
 struct LambdaExpr : Expr {
-    std::vector<std::string> params;
+    struct Param {
+        std::string name;
+        std::string type;
+        Param(std::string n, std::string t) : name(std::move(n)), type(std::move(t)) {}
+    };
+    std::vector<Param> params;
+    std::string return_type;
     ExprPtr body;
-    LambdaExpr(std::vector<std::string> p, ExprPtr b) : params(std::move(p)), body(std::move(b)) {}
+    LambdaExpr(std::vector<Param> p, std::string ret, ExprPtr b)
+        : params(std::move(p)), return_type(std::move(ret)), body(std::move(b)) {}
 };
 
 struct AwaitExpr : Expr {

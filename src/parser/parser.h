@@ -9,7 +9,7 @@ namespace flux {
 class Parser {
   public:
     explicit Parser(const std::vector<Token>& tokens);
-
+    ast::ExprPtr parse_expression(int min_prec = 0);
     ast::Module parse_module();
 
   private:
@@ -31,7 +31,6 @@ class Parser {
     /* =======================
        Expressions (Pratt)
        ======================= */
-    ast::ExprPtr parse_expression(int min_prec = 0);
 
     ast::ExprPtr parse_primary();
 
@@ -52,7 +51,6 @@ class Parser {
     std::vector<std::string> parse_type_params();
     std::string parse_type();
     std::string parse_where_clause();
-
     ast::Block parse_block();
 
     ast::StmtPtr parse_statement();

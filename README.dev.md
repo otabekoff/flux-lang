@@ -113,3 +113,24 @@ g++ -std=c++20 -I./src -o build/Debug/tuple_test.exe tests/tuple.cpp
 ctest --test-dir build --output-on-failure -C Debug
 cmake --build build --config Debug --target reference_test
 build/Debug/reference_test.exe
+ctest --test-dir build --output-on-failure -C Debug
+cmake --build build --target option_result --config Debug
+---
+
+PS D:\project\tutorial\flux> git push
+bun test v1.2.21 (7c45ed97)
+No tests found!
+
+Tests need ".test", "_test_", ".spec" or "_spec_" in the filename (ex: "MyApp.test.ts")
+
+Learn more about bun test: https://bun.com/docs/cli/test
+husky - pre-push script failed (code 1)
+error: failed to push some refs to 'https://github.com/otabekoff/flux-lang.git'
+PS D:\project\tutorial\flux> 
+
+---
+
+
+Also note you could do this too. Even if it was for .idea, or JetBrains CLion when problems occur.
+
+C:\Users\marko\AppData\Local\Programs\CLion\bin\cmake\win\x64\bin\cmake.exe --build D:\project\tutorial\flux\cmake-build-debug --target flux -j 6

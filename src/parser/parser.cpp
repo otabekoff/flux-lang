@@ -96,7 +96,7 @@ const Token& Parser::expect(TokenKind kind, const char* message) {
     if (peek().kind == kind)
         return advance();
 
-    throw DiagnosticError(message, peek().line, peek().column);
+    throw DiagnosticError(std::string(message), peek().line, peek().column);
 }
 
 bool Parser::check_visibility() {
@@ -109,8 +109,42 @@ bool Parser::check_visibility() {
    ======================= */
 
 ast::ExprPtr Parser::parse_primary() {
+
     const Token& tok = peek();
     ast::ExprPtr expr;
+    // Lambda/closure: |params| -> RetType { body }
+    if (tok.kind == TokenKind::Pipe) {
+        advance(); // consume '|'
+        std::vector<ast::LambdaExpr::Param> params;
+        // Parse parameter list
+        if (peek().kind != TokenKind::Pipe) {
+            do {
+                const Token& param_tok = expect(TokenKind::Identifier, "expected parameter name");
+                std::string param_type;
+                if (match(TokenKind::Colon)) {
+                    param_type = parse_type();
+                } else {
+                    param_type = "Unknown";
+                }
+                params.emplace_back(param_tok.lexeme, param_type);
+            } while (match(TokenKind::Comma));
+        }
+        expect(TokenKind::Pipe, "expected '|' after lambda parameters");
+        // Optional return type
+        std::string ret_type;
+        if (peek().kind == TokenKind::Arrow) {
+            advance(); // consume '->'
+            ret_type = parse_type();
+        } else {
+            ret_type = "Unknown";
+        }
+        // Body
+        expect(TokenKind::LBrace, "expected '{' to start lambda body");
+        ast::ExprPtr body = parse_expression(); // For now, parse a single expression as body
+        expect(TokenKind::RBrace, "expected '}' after lambda body");
+        return std::make_unique<ast::LambdaExpr>(std::move(params), std::move(ret_type),
+                                                 std::move(body));
+    }
 
     // Unary operators
     if (tok.kind == TokenKind::Minus || tok.kind == TokenKind::Bang || tok.kind == TokenKind::Amp ||
@@ -121,18 +155,18 @@ ast::ExprPtr Parser::parse_primary() {
         // Handle &mut
         if (op == TokenKind::Amp && peek().kind == TokenKind::Keyword && peek().lexeme == "mut") {
             advance(); // consume 'mut'
-            ast::ExprPtr operand = parse_expression(50);
+            ast::ExprPtr operand = this->parse_expression(50);
             return std::make_unique<ast::UnaryExpr>(op, std::move(operand), true);
         }
 
-        ast::ExprPtr operand = parse_expression(50); // higher than any binary
+        ast::ExprPtr operand = this->parse_expression(50); // higher than any binary
         return std::make_unique<ast::UnaryExpr>(op, std::move(operand), false);
     }
 
     // 'not' keyword as unary
     if (tok.kind == TokenKind::Keyword && tok.lexeme == "not") {
         advance();
-        ast::ExprPtr operand = parse_expression(50);
+        ast::ExprPtr operand = this->parse_expression(50);
         return std::make_unique<ast::UnaryExpr>(TokenKind::Bang, std::move(operand));
     }
 
@@ -141,9 +175,9 @@ ast::ExprPtr Parser::parse_primary() {
         advance(); // consume '('
         std::vector<ast::ExprPtr> elements;
         if (peek().kind != TokenKind::RParen) {
-            elements.push_back(parse_expression());
+            elements.push_back(this->parse_expression());
             while (match(TokenKind::Comma)) {
-                elements.push_back(parse_expression());
+                elements.push_back(this->parse_expression());
             }
         }
         expect(TokenKind::RParen, "expected ')' after tuple or grouping");
@@ -180,17 +214,17 @@ ast::ExprPtr Parser::parse_primary() {
     // Move
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "move") {
         advance();
-        return std::make_unique<ast::MoveExpr>(parse_expression(50));
+        return std::make_unique<ast::MoveExpr>(this->parse_expression(50));
     }
     // await
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "await") {
         advance();
-        return std::make_unique<ast::AwaitExpr>(parse_expression(50));
+        return std::make_unique<ast::AwaitExpr>(this->parse_expression(50));
     }
     // spawn
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "spawn") {
         advance();
-        return std::make_unique<ast::SpawnExpr>(parse_expression(50));
+        return std::make_unique<ast::SpawnExpr>(this->parse_expression(50));
     }
     // drop
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "drop") {

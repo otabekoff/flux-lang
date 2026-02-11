@@ -85,6 +85,35 @@ Type Resolver::type_from_name(const std::string& name) const {
         return {TypeKind::Tuple, name};
     }
 
+    // Option<T>
+    if (name.starts_with("Option<")) {
+        auto start = name.find('<') + 1;
+        auto end = name.find_last_of('>');
+        std::string inner = name.substr(start, end - start);
+        // Trim whitespace
+        inner.erase(0, inner.find_first_not_of(" \t\n\r"));
+        inner.erase(inner.find_last_not_of(" \t\n\r") + 1);
+        Type inner_type = type_from_name(inner);
+        return Type(TypeKind::Option, name, false, {}, nullptr, {inner_type});
+    }
+    // Result<T,E>
+    if (name.starts_with("Result<")) {
+        auto start = name.find('<') + 1;
+        auto end = name.find_last_of('>');
+        std::string inner = name.substr(start, end - start);
+        auto comma = inner.find(',');
+        std::string ok = inner.substr(0, comma);
+        std::string err = inner.substr(comma + 1);
+        // Trim whitespace for both ok and err
+        ok.erase(0, ok.find_first_not_of(" \t\n\r"));
+        ok.erase(ok.find_last_not_of(" \t\n\r") + 1);
+        err.erase(0, err.find_first_not_of(" \t\n\r"));
+        err.erase(err.find_last_not_of(" \t\n\r") + 1);
+        Type ok_type = type_from_name(ok);
+        Type err_type = type_from_name(err);
+        return Type(TypeKind::Result, name, false, {}, nullptr, {ok_type, err_type});
+    }
+
     return unknown();
 }
 
@@ -111,6 +140,21 @@ std::string Resolver::find_enum_for_variant(const std::string& variant_name) con
 }
 
 Type Resolver::type_of(const ast::Expr& expr) {
+    if (auto lambda = dynamic_cast<const ast::LambdaExpr*>(&expr)) {
+        using semantic::Type;
+        using semantic::TypeKind;
+        std::vector<Type> param_types;
+        for (const auto& param : lambda->params) {
+            param_types.push_back(type_from_name(param.type));
+        }
+        Type ret_type = type_from_name(lambda->return_type);
+        Type fn_type;
+        fn_type.kind = TypeKind::Function;
+        fn_type.name = "fn";
+        fn_type.param_types = std::move(param_types);
+        fn_type.return_type = std::make_unique<Type>(ret_type);
+        return fn_type;
+    }
     using semantic::Type;
     using semantic::TypeKind;
 

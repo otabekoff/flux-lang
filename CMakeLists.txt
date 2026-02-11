@@ -65,7 +65,12 @@ add_flux_test(numeric_promotion)
 add_flux_test(tuple)
 add_flux_test(struct_field)
 add_flux_test(array_slice)
+
 add_flux_test(reference)
+add_flux_test(lambda_parse)
+
+# Register Option/Result type test
+add_flux_test(option_result)
 
 
 # By this what we've earned?
