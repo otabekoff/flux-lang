@@ -1079,6 +1079,12 @@ std::string Parser::parse_type() {
         }
         expect(TokenKind::RParen, "expected ')'");
         type += ")";
+
+        if (match(TokenKind::Arrow)) {
+            type += " -> ";
+            type += parse_type();
+        }
+
         return type;
     }
 

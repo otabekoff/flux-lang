@@ -41,7 +41,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Tuple types** — tuple expressions `(a, b)` and tuple destructuring `let (x, y): (T, U) = pair;` are fully supported in the semantic analysis and tested in both Debug and Release. See `tuple_test` for coverage.
 - [x] **Array/Slice types** — `Array<T, N>` with compile-time size, `Slice<T>` as a view.
 - [x] **Reference types** — distinguish `&T` (immutable borrow) from `&mut T` (mutable borrow) at the type level. (Complete, tested in reference.cpp)
-- [ ] **Function types / closures** — infer and check lambda/closure types: `|x: Int32| -> Int32 { x + 1 }`.
+- [x] **Function types / closures** — infer and check lambda/closure types: `|x: Int32| -> Int32 { x + 1 }`.
 - [ ] **`Option<T>` and `Result<T, E>`** — built-in generic types with exhaustiveness integration in `match`.
 - [ ] **`Never` type propagation** — `panic()` and infinite loops produce `Never`; allow `Never` to coerce to any type.
 - [ ] **Type alias resolution** — fully resolve chains: `type A = B; type B = Int32;` → `A` is `Int32`.
@@ -313,7 +313,7 @@ Implement the core types and functions referenced in the language spec.
 | 11  | No move tracking — using a variable after `move` is not an error                             | `resolver.cpp`                 | Open   |
 | 12  | Diagnostics lack accurate source locations (many errors report `0:0`)                        | `resolver.cpp`, `diagnostic.h` | Open   |
 | 13  | Single-error-abort — resolver throws on first error instead of collecting multiple           | `resolver.cpp`                 | Open   |
-| 14  | Lambda/closure types never checked                                                           | `resolver.cpp`                 | Open   |
+| 14  | Lambda/closure types never checked                                                           | `resolver.cpp`                 | Fixed  |
 | 15  | `CompoundAssignStmt` not handled in resolver's `resolve_statement()` (uses `AssignStmt`)     | `resolver.cpp`                 | Open   |
 | 16  | Annotations parsed but never processed                                                       | `parser.cpp`, `resolver.cpp`   | Open   |
 

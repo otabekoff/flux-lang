@@ -37,7 +37,8 @@ struct Type {
     Type(const Type& other)
         : kind(other.kind), name(other.name), is_mut_ref(other.is_mut_ref),
           param_types(other.param_types),
-          return_type(other.return_type ? std::make_unique<Type>(*other.return_type) : nullptr) {}
+          return_type(other.return_type ? std::make_unique<Type>(*other.return_type) : nullptr),
+          generic_args(other.generic_args) {}
 
     Type& operator=(const Type& other) {
         if (this != &other) {
@@ -46,6 +47,7 @@ struct Type {
             is_mut_ref = other.is_mut_ref;
             param_types = other.param_types;
             return_type = other.return_type ? std::make_unique<Type>(*other.return_type) : nullptr;
+            generic_args = other.generic_args;
         }
         return *this;
     }

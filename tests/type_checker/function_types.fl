@@ -1,0 +1,13 @@
+module function_types;
+
+func apply(f: (Int32) -> Int32, x: Int32) -> Int32 {
+    return f(x);
+}
+
+func main() -> Void {
+    let double: (Int32) -> Int32 = |x: Int32| -> Int32 {
+        x * 2
+    };
+
+    let res: Int32 = apply(double, 5);
+}
