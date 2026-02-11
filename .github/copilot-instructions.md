@@ -1,4 +1,6 @@
-# Enhanced Prompt for ChatGPT 4.1 Agent (GitHub Copilot in VS Code)
+# Enhanced Prompt for ChatGPT 4.1 Agent
+
+Always obey these rules:
 
 You are working on this project using the instructions in **ROADMAP.md**.
 

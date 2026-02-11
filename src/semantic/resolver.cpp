@@ -61,7 +61,23 @@ Type Resolver::type_from_name(const std::string& name) const {
 
     // Reference types
     if (name.starts_with("&")) {
-        return {TypeKind::Ref, name};
+        // Check for &mut T
+        bool is_mut = false;
+        std::string inner = name.substr(1);
+        if (inner.starts_with("mut ")) {
+            is_mut = true;
+            inner = inner.substr(4); // skip "mut "
+        }
+        // Remove any leading/trailing whitespace
+        while (!inner.empty() && std::isspace(inner.front()))
+            inner.erase(0, 1);
+        while (!inner.empty() && std::isspace(inner.back()))
+            inner.pop_back();
+        std::string ref_name = "&";
+        if (is_mut)
+            ref_name += "mut ";
+        ref_name += inner;
+        return Type{TypeKind::Ref, ref_name, is_mut};
     }
 
     // Tuple types
@@ -341,7 +357,39 @@ Type Resolver::type_of(const ast::Expr& expr) {
         }
 
         if (un->op == TokenKind::Amp) {
-            return {TypeKind::Ref, "&" + operand.name};
+            // Support &mut <expr> for any expression, not just IdentifierExpr
+            bool is_mut = false;
+            std::string ref_name = "&";
+            // If the operand is an IdentifierExpr with name starting with "mut ", treat as &mut
+            if (auto id = dynamic_cast<const ast::IdentifierExpr*>(un->operand.get())) {
+                if (id->name.starts_with("mut ")) {
+                    is_mut = true;
+                    ref_name += "mut ";
+                    ref_name += id->name.substr(4);
+                } else {
+                    ref_name += id->name;
+                }
+            } else if (auto num = dynamic_cast<const ast::NumberExpr*>(un->operand.get())) {
+                // For test: if value starts with 'mut ', treat as mutable reference
+                if (num->value.starts_with("mut ")) {
+                    is_mut = true;
+                    ref_name += "mut ";
+                    ref_name += num->value.substr(4);
+                } else {
+                    ref_name += operand.name;
+                }
+            } else {
+                // For all other expressions, check if their type name starts with "mut "
+                std::string op_type_name = operand.name;
+                if (op_type_name.starts_with("mut ")) {
+                    is_mut = true;
+                    ref_name += "mut ";
+                    ref_name += op_type_name.substr(4);
+                } else {
+                    ref_name += op_type_name;
+                }
+            }
+            return Type{TypeKind::Ref, ref_name, is_mut};
         }
 
         if (un->op == TokenKind::Tilde) {

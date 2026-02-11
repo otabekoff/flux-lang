@@ -40,37 +40,37 @@ const PI: Float64 = 3.14159265358979;
 
 ### Integers
 
-| Type | Size | Range |
-|------|------|-------|
-| `Int8` | 8-bit | -128 to 127 |
-| `Int16` | 16-bit | -32,768 to 32,767 |
-| `Int32` | 32-bit | -2³¹ to 2³¹-1 |
-| `Int64` | 64-bit | -2⁶³ to 2⁶³-1 |
-| `Int128` | 128-bit | -2¹²⁷ to 2¹²⁷-1 |
-| `UInt8` | 8-bit | 0 to 255 |
-| `UInt16` | 16-bit | 0 to 65,535 |
-| `UInt32` | 32-bit | 0 to 2³²-1 |
-| `UInt64` | 64-bit | 0 to 2⁶⁴-1 |
-| `UInt128` | 128-bit | 0 to 2¹²⁸-1 |
-| `IntPtr` | Platform | Pointer size (signed) |
+| Type      | Size     | Range                   |
+| --------- | -------- | ----------------------- |
+| `Int8`    | 8-bit    | -128 to 127             |
+| `Int16`   | 16-bit   | -32,768 to 32,767       |
+| `Int32`   | 32-bit   | -2³¹ to 2³¹-1           |
+| `Int64`   | 64-bit   | -2⁶³ to 2⁶³-1           |
+| `Int128`  | 128-bit  | -2¹²⁷ to 2¹²⁷-1         |
+| `UInt8`   | 8-bit    | 0 to 255                |
+| `UInt16`  | 16-bit   | 0 to 65,535             |
+| `UInt32`  | 32-bit   | 0 to 2³²-1              |
+| `UInt64`  | 64-bit   | 0 to 2⁶⁴-1              |
+| `UInt128` | 128-bit  | 0 to 2¹²⁸-1             |
+| `IntPtr`  | Platform | Pointer size (signed)   |
 | `UIntPtr` | Platform | Pointer size (unsigned) |
 
 ### Floating Point
 
-| Type | Size | Precision |
-|------|------|-----------|
-| `Float32` | 32-bit | ~7 digits |
+| Type      | Size   | Precision  |
+| --------- | ------ | ---------- |
+| `Float32` | 32-bit | ~7 digits  |
 | `Float64` | 64-bit | ~15 digits |
 
 ### Other Primitives
 
-| Type | Description |
-|------|-------------|
-| `Bool` | `true` or `false` |
-| `Char` | Unicode scalar value |
-| `String` | UTF-8 string |
-| `Void` | No value (unit type) |
-| `Never` | Never returns (bottom type) |
+| Type     | Description                 |
+| -------- | --------------------------- |
+| `Bool`   | `true` or `false`           |
+| `Char`   | Unicode scalar value        |
+| `String` | UTF-8 string                |
+| `Void`   | No value (unit type)        |
+| `Never`  | Never returns (bottom type) |
 
 ## Integer Literals
 
@@ -92,7 +92,7 @@ let z: Int64 = x as Int64;
 ```
 
 No implicit conversions exist in Flux — every type conversion must be explicit.
- 
+
 ## Type Aliases
 
 You can create an alias for an existing type using the `type` keyword:
@@ -106,3 +106,20 @@ let email: EmailAddress = "user@example.com";
 ```
 
 Type aliases are just names; they are not distinct types for type checking purposes.
+
+## Reference Types
+
+Flux supports both immutable and mutable references:
+
+- Immutable reference: `&T`
+- Mutable reference: `&mut T`
+
+Example:
+
+```flux
+let x: Int32 = 42;
+let y: &Int32 = &x;        // Immutable reference
+let z: &mut Int32 = &mut x; // Mutable reference
+```
+
+See [Reference Types](/reference_types) for details.

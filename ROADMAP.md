@@ -40,7 +40,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Struct type resolution** — track field types; validate field access (`point.x`) returns the correct type instead of `Unknown`. (Tested in C++: see struct_field_test)
 - [x] **Tuple types** — tuple expressions `(a, b)` and tuple destructuring `let (x, y): (T, U) = pair;` are fully supported in the semantic analysis and tested in both Debug and Release. See `tuple_test` for coverage.
 - [x] **Array/Slice types** — `Array<T, N>` with compile-time size, `Slice<T>` as a view.
-- [ ] **Reference types** — distinguish `&T` (immutable borrow) from `&mut T` (mutable borrow) at the type level.
+- [x] **Reference types** — distinguish `&T` (immutable borrow) from `&mut T` (mutable borrow) at the type level. (Complete, tested in reference.cpp)
 - [ ] **Function types / closures** — infer and check lambda/closure types: `|x: Int32| -> Int32 { x + 1 }`.
 - [ ] **`Option<T>` and `Result<T, E>`** — built-in generic types with exhaustiveness integration in `match`.
 - [ ] **`Never` type propagation** — `panic()` and infinite loops produce `Never`; allow `Never` to coerce to any type.

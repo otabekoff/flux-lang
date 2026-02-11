@@ -109,3 +109,7 @@ Create official installers for win, macos/linux.
 
 g++ -std=c++20 -I./src -o build/Debug/tuple_test.exe tests/tuple.cpp
 
+
+ctest --test-dir build --output-on-failure -C Debug
+cmake --build build --config Debug --target reference_test
+build/Debug/reference_test.exe
