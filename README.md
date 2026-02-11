@@ -1,5 +1,8 @@
 # Flux Programming Language
 
+![CMake Multi-platform](https://github.com/otabekoff/flux-lang/actions/workflows/cmake-multi-platform.yml/badge.svg)
+![MSVC Code Analysis](https://github.com/otabekoff/flux-lang/actions/workflows/msvc.yml/badge.svg)
+
 Flux is a systems programming language focused on explicitness, safety, and predictable performance. Flux is intentionally strict: every type must be declared, allocations are explicit, and there are no hidden conversions or implicit copies.
 
 ## Philosophy

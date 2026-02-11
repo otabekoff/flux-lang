@@ -81,7 +81,7 @@ jobs:
           BINARY_PATH="${{ steps.strings.outputs.build-output-dir }}/${{ matrix.build_type }}/flux.exe"
           TARGET_NAME="flux-${{ runner.os }}-${{ matrix.c_compiler }}.exe"
         else
-          BINARY_PATH="${{ steps.strings.outputs.build-output-dir }}/flux"
+          BINARY_PATH="${{ steps.strings.outputs.build-output-dir }}/${{ matrix.build_type }}/flux"
           TARGET_NAME="flux-${{ runner.os }}-${{ matrix.c_compiler }}"
         fi
         mkdir -p staged
