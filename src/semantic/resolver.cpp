@@ -134,7 +134,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
         if (semicolon != std::string::npos && end != std::string::npos && end > semicolon) {
             std::string inner = name.substr(1, semicolon - 1);
             std::string size_str = name.substr(semicolon + 1, end - semicolon - 1);
-            // Trim whitespace from size
+            // Trim whitespace
             size_t first = size_str.find_first_not_of(" \t\n");
             if (first != std::string::npos) {
                 size_t last = size_str.find_last_not_of(" \t\n");
@@ -700,6 +700,9 @@ Type Resolver::type_of(const ast::Expr& expr) {
                             }
                         }
                     }
+                } else {
+                    // DEBUG
+                    // std::cout << "No bounds found for " << callee_id->name << std::endl;
                 }
             }
 
@@ -881,6 +884,22 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     for (const auto& t : module.traits) {
         current_scope_->declare({t.name, SymbolKind::Variable, false, true, "Type", {}});
+
+        // Parse bounds from where clause and append to type_params
+        // We do this by reconstructing the "T: Bound" strings that type_params expects
+        // This is a bit of a hack but aligns with existing structures
+        auto bounds = parse_where_clause(t.where_clause);
+        std::vector<std::string> combined_params = t.type_params;
+        for (const auto& b : bounds) {
+            std::string s = b.param_name + ": ";
+            for (size_t i = 0; i < b.bounds.size(); ++i) {
+                if (i > 0)
+                    s += " + ";
+                s += b.bounds[i];
+            }
+            combined_params.push_back(std::move(s));
+        }
+
         // Register trait method signatures
         std::vector<TraitMethodSig> sigs;
         for (const auto& m : t.methods) {
@@ -897,6 +916,20 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     // Declare functions first (forward visibility)
     for (const auto& fn : module.functions) {
+        // Parse bounds from where clause and append to type_params
+        auto bounds = parse_where_clause(fn.where_clause);
+        std::vector<std::string> combined_type_params = fn.type_params;
+        for (const auto& b : bounds) {
+            std::string s = b.param_name + ": ";
+            for (size_t i = 0; i < b.bounds.size(); ++i) {
+                if (i > 0)
+                    s += " + ";
+                s += b.bounds[i];
+            }
+            combined_type_params.push_back(std::move(s));
+        }
+        function_type_params_[fn.name] = combined_type_params;
+
         std::vector<std::string> params;
         params.reserve(fn.params.size());
         for (const auto& p : fn.params)
@@ -911,10 +944,6 @@ void Resolver::resolve_module(const ast::Module& module) {
         if (!current_scope_->declare(sym)) {
             throw DiagnosticError("duplicate function '" + fn.name + "'", 0, 0);
         }
-        // Store type_params for bound enforcement at call sites
-        if (!fn.type_params.empty()) {
-            function_type_params_[fn.name] = fn.type_params;
-        }
     }
 
     // Declare impl methods (forward visibility) and register trait impls
@@ -923,6 +952,20 @@ void Resolver::resolve_module(const ast::Module& module) {
         if (!impl.trait_name.empty()) {
             trait_impls_[impl.target_name].insert(impl.trait_name);
         }
+
+        // Parse impl bounds
+        auto impl_bounds = parse_where_clause(impl.where_clause);
+        std::vector<std::string> impl_params = impl.type_params;
+        for (const auto& b : impl_bounds) {
+            std::string s = b.param_name + ": ";
+            for (size_t i = 0; i < b.bounds.size(); ++i) {
+                if (i > 0)
+                    s += " + ";
+                s += b.bounds[i];
+            }
+            impl_params.push_back(std::move(s));
+        }
+
         for (const auto& method : impl.methods) {
             std::string qualified_name = impl.target_name + "::" + method.name;
             std::vector<std::string> params;
@@ -933,6 +976,31 @@ void Resolver::resolve_module(const ast::Module& module) {
             }
             current_scope_->declare({qualified_name, SymbolKind::Function, false, true,
                                      method.return_type, std::move(params)});
+
+            // Register method type params (method params + impl params)
+            // Implementation note: This incorrectly merges them flatly, but suffices for basic
+            // checking ideally we distinguish impl params from method params.
+            auto combined = impl_params;
+            combined.insert(combined.end(), method.type_params.begin(), method.type_params.end());
+
+            // Also parse method's own where clause
+            auto method_bounds = parse_where_clause(method.where_clause);
+            for (const auto& b : method_bounds) {
+                std::string s = b.param_name + ": ";
+                for (size_t i = 0; i < b.bounds.size(); ++i) {
+                    if (i > 0)
+                        s += " + ";
+                    s += b.bounds[i];
+                }
+                combined.push_back(std::move(s));
+            }
+
+            if (!combined.empty()) {
+                function_type_params_[qualified_name] = combined;
+                // Also map simple name if unambiguous? No, resolver uses qualified names for
+                // matching? Actually CallExpr might use simple name if inside a method? For now,
+                // store qualified.
+            }
         }
     }
 
@@ -1627,6 +1695,65 @@ bool Resolver::type_implements_trait(const std::string& type_name,
         return it->second.count(trait_name) > 0;
     }
     return false;
+}
+
+std::vector<Resolver::TypeParamBound>
+Resolver::parse_where_clause(const std::string& where_clause) {
+    std::vector<TypeParamBound> result;
+    if (where_clause.empty())
+        return result;
+
+    // "T: Trait + Other, U: Trait"
+    size_t start = 0;
+    while (start < where_clause.size()) {
+        auto comma_pos = where_clause.find(',', start);
+        std::string part;
+        if (comma_pos == std::string::npos) {
+            part = where_clause.substr(start);
+            start = where_clause.size();
+        } else {
+            part = where_clause.substr(start, comma_pos - start);
+            start = comma_pos + 1;
+        }
+
+        // Parse "T: Bounds"
+        auto colon_pos = part.find(':');
+        if (colon_pos != std::string::npos) {
+            TypeParamBound bound;
+            bound.param_name = part.substr(0, colon_pos);
+            // Trim param name
+            size_t p_first = bound.param_name.find_first_not_of(" \t\n");
+            if (p_first != std::string::npos) {
+                size_t p_last = bound.param_name.find_last_not_of(" \t\n");
+                bound.param_name = bound.param_name.substr(p_first, p_last - p_first + 1);
+            }
+
+            std::string bounds_str = part.substr(colon_pos + 1);
+            // Split bounds by '+'
+            size_t b_start = 0;
+            while (b_start < bounds_str.size()) {
+                auto plus_pos = bounds_str.find('+', b_start);
+                std::string trait_name;
+                if (plus_pos == std::string::npos) {
+                    trait_name = bounds_str.substr(b_start);
+                    b_start = bounds_str.size();
+                } else {
+                    trait_name = bounds_str.substr(b_start, plus_pos - b_start);
+                    b_start = plus_pos + 1;
+                }
+                // Trim trait name
+                size_t t_first = trait_name.find_first_not_of(" \t\n");
+                if (t_first != std::string::npos) {
+                    size_t t_last = trait_name.find_last_not_of(" \t\n");
+                    bound.bounds.push_back(trait_name.substr(t_first, t_last - t_first + 1));
+                }
+            }
+            if (!bound.bounds.empty()) {
+                result.push_back(std::move(bound));
+            }
+        }
+    }
+    return result;
 }
 
 } // namespace flux::semantic

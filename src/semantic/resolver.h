@@ -70,6 +70,8 @@ class Resolver {
     static std::vector<TypeParamBound>
     parse_type_param_bounds(const std::vector<std::string>& type_params);
 
+    static std::vector<TypeParamBound> parse_where_clause(const std::string& where_clause);
+
     // Check if a type implements a trait
     bool type_implements_trait(const std::string& type_name, const std::string& trait_name) const;
 

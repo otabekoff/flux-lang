@@ -370,6 +370,7 @@ struct ImplBlock : Node {
     std::string target_name;
     std::string trait_name; // empty if not a trait impl
     std::vector<FunctionDecl> methods;
+    std::string where_clause; // raw string for now
 
     ImplBlock(std::vector<std::string> type_params, std::string target,
               std::vector<FunctionDecl> methods)
@@ -382,6 +383,7 @@ struct TraitDecl : Node {
     std::vector<std::string> type_params;
     std::vector<FunctionDecl> methods; // potentially just signatures later
     bool is_public = false;
+    std::string where_clause; // raw string for now
 
     TraitDecl(std::string name, std::vector<std::string> type_params,
               std::vector<FunctionDecl> methods)

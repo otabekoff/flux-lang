@@ -74,6 +74,7 @@ add_flux_test(option_result)
 add_flux_test(type_alias)
 add_flux_test(never_propagation)
 add_flux_test(trait_bound)
+add_flux_test(where_clause)
 
 
 # By this what we've earned?

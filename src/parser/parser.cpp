@@ -960,6 +960,8 @@ ast::ImplBlock Parser::parse_impl_block() {
         target_name = name;
     }
 
+    std::string where_clause = parse_where_clause();
+
     expect(TokenKind::LBrace, "expected '{'");
 
     std::vector<ast::FunctionDecl> methods;
@@ -982,6 +984,7 @@ ast::ImplBlock Parser::parse_impl_block() {
 
     auto impl = ast::ImplBlock{std::move(type_params), target_name, std::move(methods)};
     impl.trait_name = trait_name;
+    impl.where_clause = std::move(where_clause);
     return impl;
 }
 
@@ -989,6 +992,9 @@ ast::TraitDecl Parser::parse_trait_declaration(bool is_public) {
     expect(TokenKind::Keyword, "expected 'trait'");
     const std::string name = expect(TokenKind::Identifier, "expected trait name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
+
+    std::string where_clause = parse_where_clause();
+
     expect(TokenKind::LBrace, "expected '{'");
 
     std::vector<ast::FunctionDecl> methods;
@@ -1040,15 +1046,15 @@ std::string Parser::parse_where_clause() {
         return "";
 
     advance(); // consume 'where'
-    std::string clause = "where ";
+    std::string clause;
 
-    while (peek().kind != TokenKind::LBrace && !is_at_end()) {
+    while (peek().kind != TokenKind::LBrace && peek().kind != TokenKind::Semicolon &&
+           !is_at_end()) {
+        if (!clause.empty())
+            clause += " ";
         clause += peek().lexeme;
         advance();
-        if (peek().kind != TokenKind::LBrace)
-            clause += " ";
     }
-
     return clause;
 }
 
