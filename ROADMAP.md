@@ -42,7 +42,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Array/Slice types** — `Array<T, N>` with compile-time size, `Slice<T>` as a view.
 - [x] **Reference types** — distinguish `&T` (immutable borrow) from `&mut T` (mutable borrow) at the type level. (Complete, tested in reference.cpp)
 - [x] **Function types / closures** — infer and check lambda/closure types: `|x: Int32| -> Int32 { x + 1 }`.
-- [ ] **`Option<T>` and `Result<T, E>`** — built-in generic types with exhaustiveness integration in `match`.
+- [x] **`Option<T>` and `Result<T, E>`** — built-in generic types with exhaustiveness integration in `match`. (Complete, handles Some/None and Ok/Err)
 - [ ] **`Never` type propagation** — `panic()` and infinite loops produce `Never`; allow `Never` to coerce to any type.
 - [ ] **Type alias resolution** — fully resolve chains: `type A = B; type B = Int32;` → `A` is `Int32`.
 
@@ -291,7 +291,7 @@ Implement the core types and functions referenced in the language spec.
 - [ ] **Error message audit** — every possible error has a clear, actionable message.
 - [ ] **Specification conformance tests** — one test per spec feature.
 - [ ] **Memory safety audit** — valgrind/AddressSanitizer on the compiler itself.
-- [ ] **Cross-platform CI** — Windows, Linux, macOS builds.
+- [x] **Cross-platform CI** — Windows, Linux, macOS builds. (Via GitHub Actions)
 - [ ] **Semantic versioning** — define stability guarantees for the language and compiler.
 
 ---

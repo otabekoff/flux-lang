@@ -88,6 +88,9 @@ inline Type unknown() {
 inline Type void_type() {
     return Type(TypeKind::Void, "Void");
 }
+inline Type never_type() {
+    return Type(TypeKind::Never, "Never");
+}
 
 } // namespace flux::semantic
 
