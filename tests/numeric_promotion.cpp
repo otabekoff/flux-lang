@@ -39,12 +39,14 @@ int main() {
             std::string b = "Int" + std::to_string(wb);
             std::string res = r.promote_integer_name(a, b);
             int expect = std::max(wa, wb);
+            (void)expect;
             assert(res == "Int" + std::to_string(expect));
 
             a = "UInt" + std::to_string(wa);
             b = "UInt" + std::to_string(wb);
             res = r.promote_integer_name(a, b);
             expect = std::max(wa, wb);
+            (void)expect;
             assert(res == "UInt" + std::to_string(expect));
 
             // Mixed signed/unsigned: should be signed
@@ -52,6 +54,7 @@ int main() {
             b = "UInt" + std::to_string(wb);
             res = r.promote_integer_name(a, b);
             expect = std::max(wa, wb);
+            (void)expect;
             assert(res == "Int" + std::to_string(expect));
         }
     }

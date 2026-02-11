@@ -20,6 +20,7 @@ void test_parse_lambda() {
     Parser parser(tokens);
     ExprPtr expr = parser.parse_expression();
     auto* lambda = dynamic_cast<LambdaExpr*>(expr.get());
+    (void)lambda;
     assert(lambda && "Should parse a LambdaExpr");
     assert(lambda->params.size() == 2);
     assert(lambda->params[0].name == "x");
