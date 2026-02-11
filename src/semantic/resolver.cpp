@@ -357,38 +357,12 @@ Type Resolver::type_of(const ast::Expr& expr) {
         }
 
         if (un->op == TokenKind::Amp) {
-            // Support &mut <expr> for any expression, not just IdentifierExpr
-            bool is_mut = false;
+            // Use AST mutability flag
+            bool is_mut = un->is_mutable;
             std::string ref_name = "&";
-            // If the operand is an IdentifierExpr with name starting with "mut ", treat as &mut
-            if (auto id = dynamic_cast<const ast::IdentifierExpr*>(un->operand.get())) {
-                if (id->name.starts_with("mut ")) {
-                    is_mut = true;
-                    ref_name += "mut ";
-                    ref_name += id->name.substr(4);
-                } else {
-                    ref_name += id->name;
-                }
-            } else if (auto num = dynamic_cast<const ast::NumberExpr*>(un->operand.get())) {
-                // For test: if value starts with 'mut ', treat as mutable reference
-                if (num->value.starts_with("mut ")) {
-                    is_mut = true;
-                    ref_name += "mut ";
-                    ref_name += num->value.substr(4);
-                } else {
-                    ref_name += operand.name;
-                }
-            } else {
-                // For all other expressions, check if their type name starts with "mut "
-                std::string op_type_name = operand.name;
-                if (op_type_name.starts_with("mut ")) {
-                    is_mut = true;
-                    ref_name += "mut ";
-                    ref_name += op_type_name.substr(4);
-                } else {
-                    ref_name += op_type_name;
-                }
-            }
+            if (is_mut)
+                ref_name += "mut ";
+            ref_name += operand.name;
             return Type{TypeKind::Ref, ref_name, is_mut};
         }
 

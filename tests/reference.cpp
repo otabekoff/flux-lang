@@ -33,10 +33,8 @@ void test_mutable_reference() {
     std::cout << "test_mutable_reference: start\n" << std::flush;
     // &mut 1 should resolve to &mut Int32 (mutable)
     std::cout << "test_mutable_reference: start\n" << std::flush;
-    // For test: &mut 1 should resolve to &mut Int32 (mutable)
-    // We simulate &mut by using a NumberExpr and expecting resolver to handle mutability for the
-    // test In a real parser, &mut <expr> would be a different AST node or have a mutability flag
-    UnaryExpr ref(flux::TokenKind::Amp, std::make_unique<NumberExpr>("mut 1"));
+    // Use the is_mutable flag in UnaryExpr to represent &mut 1
+    UnaryExpr ref(flux::TokenKind::Amp, std::make_unique<NumberExpr>("1"), true);
     std::cout << "after UnaryExpr\n" << std::flush;
     Resolver resolver;
     std::cout << "after Resolver\n" << std::flush;
@@ -48,9 +46,8 @@ void test_mutable_reference() {
     std::cout << "after assert kind==Ref\n" << std::flush;
     assert(t.is_mut_ref);
     std::cout << "after assert is_mut_ref\n" << std::flush;
-    // Accept any name starting with &mut for this test
-    assert(t.name.starts_with("&mut "));
-    std::cout << "after assert name starts with &mut\n" << std::flush;
+    assert(t.name == "&mut Int32");
+    std::cout << "after assert name==&mut Int32\n" << std::flush;
 }
 
 int main() {

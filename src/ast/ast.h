@@ -72,8 +72,10 @@ struct BinaryExpr : Expr {
 struct UnaryExpr : Expr {
     TokenKind op;
     ExprPtr operand;
+    bool is_mutable;
 
-    UnaryExpr(TokenKind op, ExprPtr expr) : op(op), operand(std::move(expr)) {}
+    UnaryExpr(TokenKind op, ExprPtr expr, bool is_mutable = false)
+        : op(op), operand(std::move(expr)), is_mutable(is_mutable) {}
 };
 
 struct MoveExpr : Expr {

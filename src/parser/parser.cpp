@@ -122,11 +122,11 @@ ast::ExprPtr Parser::parse_primary() {
         if (op == TokenKind::Amp && peek().kind == TokenKind::Keyword && peek().lexeme == "mut") {
             advance(); // consume 'mut'
             ast::ExprPtr operand = parse_expression(50);
-            return std::make_unique<ast::UnaryExpr>(op, std::move(operand));
+            return std::make_unique<ast::UnaryExpr>(op, std::move(operand), true);
         }
 
         ast::ExprPtr operand = parse_expression(50); // higher than any binary
-        return std::make_unique<ast::UnaryExpr>(op, std::move(operand));
+        return std::make_unique<ast::UnaryExpr>(op, std::move(operand), false);
     }
 
     // 'not' keyword as unary
