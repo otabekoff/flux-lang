@@ -245,3 +245,6 @@ C:\Users\marko\AppData\Local\Programs\CLion\bin\cmake\win\x64\bin\cmake.exe --bu
 ---
 
 
+[main] Configuring project: flux 
+Cannot configure: No configure preset is active for this CMake project
+Unable to get the location of clang-format executable - no active workspace selected

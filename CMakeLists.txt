@@ -72,6 +72,7 @@ add_flux_test(lambda_parse)
 # Register Option/Result type test
 add_flux_test(option_result)
 add_flux_test(type_alias)
+add_flux_test(never_propagation)
 
 
 # By this what we've earned?

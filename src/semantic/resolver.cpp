@@ -233,12 +233,22 @@ Type Resolver::type_of(const ast::Expr& expr) {
             throw DiagnosticError("empty array literal is not allowed", 0, 0);
         }
         Type first_type = type_of(*arr->elements[0]);
+        bool any_never = first_type.kind == TypeKind::Never;
+
         for (size_t i = 1; i < arr->elements.size(); ++i) {
             Type t = type_of(*arr->elements[i]);
-            if (t != first_type) {
+            if (t.kind == TypeKind::Never) {
+                any_never = true;
+                continue;
+            }
+            if (first_type.kind == TypeKind::Never) {
+                first_type = t;
+            } else if (t != first_type && t.kind != TypeKind::Unknown) {
                 throw DiagnosticError("array elements must have the same type", 0, 0);
             }
         }
+        if (any_never)
+            return never_type();
         std::string name = "[" + first_type.name + ";" + std::to_string(arr->elements.size()) + "]";
         return {TypeKind::Array, name};
     }
@@ -283,13 +293,18 @@ Type Resolver::type_of(const ast::Expr& expr) {
     if (auto tuple = dynamic_cast<const ast::TupleExpr*>(&expr)) {
         std::string name = "(";
         bool first = true;
+        bool any_never = false;
         for (const auto& elem : tuple->elements) {
             Type t = type_of(*elem);
+            if (t.kind == TypeKind::Never)
+                any_never = true;
             if (!first)
                 name += ",";
             name += t.name;
             first = false;
         }
+        if (any_never)
+            return never_type();
         name += ")";
         return {TypeKind::Tuple, name};
     }
@@ -399,6 +414,8 @@ Type Resolver::type_of(const ast::Expr& expr) {
         if (bin->op == TokenKind::Dot) {
             // Try to resolve the type of the left-hand side
             Type lhs = type_of(*bin->left);
+            if (lhs.kind == TypeKind::Never)
+                return never_type();
 
             // Determine the field name (right side must be identifier)
             if (auto rhs_id = dynamic_cast<const ast::IdentifierExpr*>(bin->right.get())) {
@@ -445,13 +462,19 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
         // Handle index access
         if (bin->op == TokenKind::LBracket) {
-            type_of(*bin->left);
-            type_of(*bin->right);
+            Type lhs = type_of(*bin->left);
+            Type rhs = type_of(*bin->right);
+            if (lhs.kind == TypeKind::Never || rhs.kind == TypeKind::Never)
+                return never_type();
             return unknown(); // Would need element type info
         }
 
         Type lhs = type_of(*bin->left);
         Type rhs = type_of(*bin->right);
+
+        if (lhs.kind == TypeKind::Never || rhs.kind == TypeKind::Never) {
+            return never_type();
+        }
 
         // Range operator
         if (bin->op == TokenKind::DotDot) {
@@ -462,11 +485,13 @@ Type Resolver::type_of(const ast::Expr& expr) {
         if (bin->op == TokenKind::Plus || bin->op == TokenKind::Minus ||
             bin->op == TokenKind::Star || bin->op == TokenKind::Slash ||
             bin->op == TokenKind::Percent) {
-            if (lhs.kind != rhs.kind) {
+            if (lhs.kind != rhs.kind && lhs.kind != TypeKind::Unknown &&
+                rhs.kind != TypeKind::Unknown) {
                 throw DiagnosticError("type mismatch in binary expression", 0, 0);
             }
 
-            if (lhs.kind != TypeKind::Int && lhs.kind != TypeKind::Float) {
+            if (lhs.kind != TypeKind::Int && lhs.kind != TypeKind::Float &&
+                lhs.kind != TypeKind::Unknown) {
                 throw DiagnosticError("invalid operands for arithmetic operator", 0, 0);
             }
 
@@ -477,7 +502,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
         if (bin->op == TokenKind::Amp || bin->op == TokenKind::Pipe ||
             bin->op == TokenKind::Caret || bin->op == TokenKind::ShiftLeft ||
             bin->op == TokenKind::ShiftRight) {
-            if (lhs.kind != TypeKind::Int) {
+            if (lhs.kind != TypeKind::Int && lhs.kind != TypeKind::Unknown) {
                 throw DiagnosticError("invalid operands for bitwise operator", 0, 0);
             }
             return lhs;
@@ -487,7 +512,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
         if (bin->op == TokenKind::EqualEqual || bin->op == TokenKind::BangEqual ||
             bin->op == TokenKind::Less || bin->op == TokenKind::LessEqual ||
             bin->op == TokenKind::Greater || bin->op == TokenKind::GreaterEqual) {
-            if (lhs != rhs) {
+            if (lhs != rhs && lhs.kind != TypeKind::Unknown && rhs.kind != TypeKind::Unknown) {
                 throw DiagnosticError("comparison between incompatible types", 0, 0);
             }
 
@@ -496,7 +521,8 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
         // Logical operators
         if (bin->op == TokenKind::AmpAmp || bin->op == TokenKind::PipePipe) {
-            if (lhs.kind != TypeKind::Bool || rhs.kind != TypeKind::Bool) {
+            if ((lhs.kind != TypeKind::Bool && lhs.kind != TypeKind::Unknown) ||
+                (rhs.kind != TypeKind::Bool && rhs.kind != TypeKind::Unknown)) {
                 throw DiagnosticError("logical operators require Bool operands", 0, 0);
             }
             return {TypeKind::Bool, "Bool"};
@@ -505,6 +531,8 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
     if (auto un = dynamic_cast<const ast::UnaryExpr*>(&expr)) {
         Type operand = type_of(*un->operand);
+        if (operand.kind == TypeKind::Never)
+            return never_type();
 
         if (un->op == TokenKind::Minus) {
             if (operand.kind != TypeKind::Int && operand.kind != TypeKind::Float) {
@@ -553,6 +581,8 @@ Type Resolver::type_of(const ast::Expr& expr) {
         try {
             if (call->callee) {
                 callee_type = type_of(*call->callee);
+                if (callee_type.kind == TypeKind::Never)
+                    return never_type();
             }
         } catch (...) {
             // Fallback
@@ -562,12 +592,16 @@ Type Resolver::type_of(const ast::Expr& expr) {
         if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
             if (callee_id->name == "Some" && call->arguments.size() == 1) {
                 Type val_type = type_of(*call->arguments[0]);
+                if (val_type.kind == TypeKind::Never)
+                    return never_type();
                 Type t(TypeKind::Option, "Option<" + val_type.name + ">");
                 t.generic_args.push_back(val_type);
                 return t;
             }
             if (callee_id->name == "Ok" && call->arguments.size() == 1) {
                 Type val_type = type_of(*call->arguments[0]);
+                if (val_type.kind == TypeKind::Never)
+                    return never_type();
                 Type t(TypeKind::Result, "Result<" + val_type.name + ", Unknown>");
                 t.generic_args.push_back(val_type);
                 t.generic_args.push_back(unknown());
@@ -575,6 +609,8 @@ Type Resolver::type_of(const ast::Expr& expr) {
             }
             if (callee_id->name == "Err" && call->arguments.size() == 1) {
                 Type err_type = type_of(*call->arguments[0]);
+                if (err_type.kind == TypeKind::Never)
+                    return never_type();
                 Type t(TypeKind::Result, "Result<Unknown, " + err_type.name + ">");
                 t.generic_args.push_back(unknown());
                 t.generic_args.push_back(err_type);
@@ -591,18 +627,24 @@ Type Resolver::type_of(const ast::Expr& expr) {
                                       0, 0);
             }
 
+            bool any_never = false;
             for (size_t i = 0; i < call->arguments.size(); ++i) {
                 Type arg_type = type_of(*call->arguments[i]);
+                if (arg_type.kind == TypeKind::Never)
+                    any_never = true;
                 Type param_type = callee_type.param_types[i];
 
                 if (arg_type != param_type && param_type.kind != TypeKind::Unknown &&
-                    arg_type.kind != TypeKind::Unknown) {
+                    arg_type.kind != TypeKind::Unknown && arg_type.kind != TypeKind::Never) {
                     throw DiagnosticError("argument " + std::to_string(i + 1) + " has type '" +
                                               arg_type.name + "', expected '" + param_type.name +
                                               "'",
                                           0, 0);
                 }
             }
+
+            if (any_never)
+                return never_type();
 
             if (callee_type.return_type)
                 return *callee_type.return_type;

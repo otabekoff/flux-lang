@@ -43,7 +43,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Reference types** — distinguish `&T` (immutable borrow) from `&mut T` (mutable borrow) at the type level. (Complete, tested in reference.cpp)
 - [x] **Function types / closures** — infer and check lambda/closure types: `|x: Int32| -> Int32 { x + 1 }`.
 - [x] **`Option<T>` and `Result<T, E>`** — built-in generic types with exhaustiveness integration in `match`. (Complete, handles Some/None and Ok/Err)
-- [ ] **`Never` type propagation** — `panic()` and infinite loops produce `Never`; allow `Never` to coerce to any type.
+- [x] **`Never` type propagation** — `panic()` and infinite loops produce `Never`; allow `Never` to coerce to any type. Unreachable code after diverging expressions is detected.
 - [x] **Type alias resolution** — fully resolve chains: `type A = B; type B = Int32;` → `A` is `Int32`. Implemented with recursive resolution and cycle detection.
 
 ### 1.2 Generics & Trait Bounds
