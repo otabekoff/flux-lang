@@ -13,7 +13,7 @@ const fluxGrammar = JSON.parse(
 export default defineConfig({
     title: 'Flux Language',
     description: 'Documentation for the Flux programming language',
-    base: '/',
+    base: '/flux-lang/',
 
     head: [
         ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
