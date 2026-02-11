@@ -1,26 +1,25 @@
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 
-#include "lexer/lexer.h"
 #include "lexer/diagnostic.h"
+#include "lexer/lexer.h"
 
-#include "parser/parser.h"
 #include "ast/ast.h"
+#include "parser/parser.h"
 
 // Debug
 #include "ast/ast_printer.h"
 
 #include "semantic/resolver.h"
 
-
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "flux: no input file\n";
         return 1;
     }
 
-    const char * const path = argv[1];
+    const char* const path = argv[1];
 
     std::ifstream file(path);
     if (!file) {
@@ -47,7 +46,7 @@ int main(int argc, char **argv) {
         resolver.resolve(module);
 
         std::cout << "Semantic analysis OK\n";
-    } catch (const flux::DiagnosticError &e) {
+    } catch (const flux::DiagnosticError& e) {
         std::cerr << e.what() << '\n';
         return 1;
     }

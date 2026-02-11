@@ -1,39 +1,40 @@
 #ifndef FLUX_SCOPE_H
 #define FLUX_SCOPE_H
 
-#include <unordered_map>
-#include <string>
 #include "symbol.h"
+#include <string>
+#include <unordered_map>
 
 namespace flux::semantic {
 
-    class Scope {
-    public:
-        explicit Scope(Scope* parent = nullptr)
-            : parent_(parent) {}
+class Scope {
+  public:
+    explicit Scope(Scope* parent = nullptr) : parent_(parent) {}
 
-        bool declare(const Symbol& symbol) {
-            auto [_, inserted] = symbols_.emplace(symbol.name, symbol);
-            return inserted;
-        }
+    bool declare(const Symbol& symbol) {
+        auto [_, inserted] = symbols_.emplace(symbol.name, symbol);
+        return inserted;
+    }
 
-        const Symbol* lookup(const std::string& name) const {
-            auto it = symbols_.find(name);
-            if (it != symbols_.end())
-                return &it->second;
+    const Symbol* lookup(const std::string& name) const {
+        auto it = symbols_.find(name);
+        if (it != symbols_.end())
+            return &it->second;
 
-            if (parent_)
-                return parent_->lookup(name);
+        if (parent_)
+            return parent_->lookup(name);
 
-            return nullptr;
-        }
+        return nullptr;
+    }
 
-        Scope* parent() const { return parent_; }
+    Scope* parent() const {
+        return parent_;
+    }
 
-    private:
-        Scope* parent_;
-        std::unordered_map<std::string, Symbol> symbols_;
-    };
+  private:
+    Scope* parent_;
+    std::unordered_map<std::string, Symbol> symbols_;
+};
 
 } // namespace flux::semantic
 

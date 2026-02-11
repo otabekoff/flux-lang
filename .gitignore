@@ -1,0 +1,50 @@
+# Build artifacts
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+build.ninja
+*.obj
+*.o
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.pdb
+
+# IDEs
+# .vscode/
+# .idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node/Bun/JS
+node_modules/
+bun.lock
+package-lock.json
+yarn.lock
+
+# Editor
+*.swp
+*.swo
+
+# Flux docs/dev
+README.dev.md
+Testing
+
+# Temp
+*.tmp
+.cache
+build
+built
+dist
+out
+.vitepress/cache
+.vitepress/dist
+docs/.vitepress/cache
+docs/.vitepress/dist
+editors/node_modules

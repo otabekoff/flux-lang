@@ -1,0 +1,45 @@
+{
+    "name": "flux",
+    "version": "0.1.0",
+    "description": "The Flux Compiler",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "tsc:init": "tsc --init",
+        "dev": "vitepress dev docs",
+        "build": "vitepress build docs",
+        "preview": "vitepress preview docs",
+        "prepare": "husky install",
+        "lint": "bunx lint-staged",
+        "test": "echo \"No tests\"",
+        "commit": "cz",
+        "release": "semantic-release"
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^20.4.1",
+        "@commitlint/config-conventional": "^20.4.1",
+        "@types/bun": "latest",
+        "commitlint": "20.4.1",
+        "husky": "^9.1.7",
+        "lint-staged": "^16.2.7",
+        "prettier": "^3.8.1",
+        "semantic-release": "^24.0.0",
+        "vitepress": "^1.6.3",
+        "vue": "^3.5.13"
+    },
+    "lint-staged": {
+        "*.{cpp,h,hpp}": [
+            "clang-format -i"
+        ],
+        "*.{js,json,md}": [
+            "prettier --write"
+        ]
+    },
+    "dependencies": {
+        "typescript": "^5.9.3"
+    },
+    "module": "index.ts",
+    "peerDependencies": {
+        "typescript": "^5"
+    }
+}
