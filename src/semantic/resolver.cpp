@@ -643,6 +643,45 @@ Type Resolver::type_of(const ast::Expr& expr) {
                 }
             }
 
+            // Trait bound enforcement: check type param bounds against concrete arg types
+            if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
+                auto tp_it = function_type_params_.find(callee_id->name);
+                if (tp_it != function_type_params_.end()) {
+                    auto bounds = parse_type_param_bounds(tp_it->second);
+                    auto sym = current_scope_->lookup(callee_id->name);
+                    if (sym && sym->kind == SymbolKind::Function) {
+                        std::unordered_map<std::string, std::string> param_mapping;
+                        for (size_t i = 0;
+                             i < sym->param_types.size() && i < call->arguments.size(); ++i) {
+                            for (const auto& b : bounds) {
+                                if (sym->param_types[i] == b.param_name) {
+                                    Type arg_type = type_of(*call->arguments[i]);
+                                    if (arg_type.kind != TypeKind::Unknown &&
+                                        arg_type.kind != TypeKind::Never) {
+                                        param_mapping[b.param_name] = arg_type.name;
+                                    }
+                                }
+                            }
+                        }
+                        for (const auto& b : bounds) {
+                            auto map_it = param_mapping.find(b.param_name);
+                            if (map_it != param_mapping.end()) {
+                                for (const auto& trait_name : b.bounds) {
+                                    if (!type_implements_trait(map_it->second, trait_name)) {
+                                        throw DiagnosticError("type '" + map_it->second +
+                                                                  "' does not implement trait '" +
+                                                                  trait_name +
+                                                                  "' required by type parameter '" +
+                                                                  b.param_name + "'",
+                                                              0, 0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (any_never)
                 return never_type();
 
@@ -821,6 +860,18 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     for (const auto& t : module.traits) {
         current_scope_->declare({t.name, SymbolKind::Variable, false, true, "Type", {}});
+        // Register trait method signatures
+        std::vector<TraitMethodSig> sigs;
+        for (const auto& m : t.methods) {
+            TraitMethodSig sig;
+            sig.name = m.name;
+            sig.return_type = m.return_type;
+            for (const auto& p : m.params)
+                if (p.name != "self")
+                    sig.param_types.push_back(p.type);
+            sigs.push_back(std::move(sig));
+        }
+        trait_methods_[t.name] = std::move(sigs);
     }
 
     // Declare functions first (forward visibility)
@@ -839,10 +890,18 @@ void Resolver::resolve_module(const ast::Module& module) {
         if (!current_scope_->declare(sym)) {
             throw DiagnosticError("duplicate function '" + fn.name + "'", 0, 0);
         }
+        // Store type_params for bound enforcement at call sites
+        if (!fn.type_params.empty()) {
+            function_type_params_[fn.name] = fn.type_params;
+        }
     }
 
-    // Declare impl methods (forward visibility)
+    // Declare impl methods (forward visibility) and register trait impls
     for (const auto& impl : module.impls) {
+        // Register trait impl
+        if (!impl.trait_name.empty()) {
+            trait_impls_[impl.target_name].insert(impl.trait_name);
+        }
         for (const auto& method : impl.methods) {
             std::string qualified_name = impl.target_name + "::" + method.name;
             std::vector<std::string> params;
@@ -1491,6 +1550,61 @@ bool Resolver::are_types_compatible(const Type& target, const Type& source) cons
         return t_ok && e_ok;
     }
 
+    return false;
+}
+
+// --- Trait bound helpers ---
+
+std::vector<Resolver::TypeParamBound>
+Resolver::parse_type_param_bounds(const std::vector<std::string>& type_params) {
+    std::vector<TypeParamBound> result;
+    for (const auto& tp : type_params) {
+        TypeParamBound bound;
+        // Format: "T" or "T: Trait1 + Trait2"
+        auto colon_pos = tp.find(':');
+        if (colon_pos == std::string::npos) {
+            bound.param_name = tp;
+            // No bounds
+        } else {
+            bound.param_name = tp.substr(0, colon_pos);
+            // Trim leading/trailing spaces from param name
+            while (!bound.param_name.empty() && bound.param_name.back() == ' ')
+                bound.param_name.pop_back();
+            // Parse bounds after colon
+            std::string bounds_str = tp.substr(colon_pos + 1);
+            // Split by '+'
+            size_t start = 0;
+            while (start < bounds_str.size()) {
+                auto plus_pos = bounds_str.find('+', start);
+                std::string trait_name;
+                if (plus_pos == std::string::npos) {
+                    trait_name = bounds_str.substr(start);
+                    start = bounds_str.size();
+                } else {
+                    trait_name = bounds_str.substr(start, plus_pos - start);
+                    start = plus_pos + 1;
+                }
+                // Trim whitespace
+                size_t first = trait_name.find_first_not_of(' ');
+                size_t last = trait_name.find_last_not_of(' ');
+                if (first != std::string::npos) {
+                    bound.bounds.push_back(trait_name.substr(first, last - first + 1));
+                }
+            }
+        }
+        if (!bound.bounds.empty()) {
+            result.push_back(std::move(bound));
+        }
+    }
+    return result;
+}
+
+bool Resolver::type_implements_trait(const std::string& type_name,
+                                     const std::string& trait_name) const {
+    auto it = trait_impls_.find(type_name);
+    if (it != trait_impls_.end()) {
+        return it->second.count(trait_name) > 0;
+    }
     return false;
 }
 

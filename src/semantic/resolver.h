@@ -51,6 +51,28 @@ class Resolver {
 
     bool are_types_compatible(const Type& target, const Type& source) const;
 
+  public:
+    // Trait method signature for registry
+    struct TraitMethodSig {
+        std::string name;
+        std::vector<std::string> param_types; // excluding self
+        std::string return_type;
+    };
+
+    // Parsed type parameter bound: "T: Display + Clone" → {param_name="T",
+    // bounds={"Display","Clone"}}
+    struct TypeParamBound {
+        std::string param_name;
+        std::vector<std::string> bounds;
+    };
+
+    // Parse type_params strings into structured bounds
+    static std::vector<TypeParamBound>
+    parse_type_param_bounds(const std::vector<std::string>& type_params);
+
+    // Check if a type implements a trait
+    bool type_implements_trait(const std::string& type_name, const std::string& trait_name) const;
+
   private:
     static Type unknown() {
         return {TypeKind::Unknown, "Unknown"};
@@ -82,6 +104,15 @@ class Resolver {
 
     // Type aliases: alias name -> underlying type name
     std::unordered_map<std::string, std::string> type_aliases_;
+
+    // Trait registry: trait name -> list of required method signatures
+    std::unordered_map<std::string, std::vector<TraitMethodSig>> trait_methods_;
+
+    // Impl registry: type name -> set of trait names it implements
+    std::unordered_map<std::string, std::unordered_set<std::string>> trait_impls_;
+
+    // Function type params: function name -> type_params (for bound enforcement at call sites)
+    std::unordered_map<std::string, std::vector<std::string>> function_type_params_;
 };
 } // namespace flux::semantic
 
