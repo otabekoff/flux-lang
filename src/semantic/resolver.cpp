@@ -581,6 +581,13 @@ Type Resolver::type_of(const ast::Expr& expr) {
             return void_type();
         }
 
+        // Special handling for panic built-in if callee resolution is simple
+        if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
+            if (callee_id->name == "panic") {
+                return never_type();
+            }
+        }
+
         // 3. Built-ins (fallback if callee resolution failed or returned non-Function)
         if (callee_type.kind == TypeKind::Unknown) {
             // Try to handle built-ins by name if callee is an identifier?
@@ -831,7 +838,7 @@ bool Resolver::resolve_block(const ast::Block& block) {
 
     for (const auto& stmt : block.statements) {
         if (always_returns) {
-            throw DiagnosticError("unreachable code after return", 0, 0);
+            throw DiagnosticError("unreachable code", 0, 0);
         }
 
         if (resolve_statement(*stmt)) {
@@ -1023,10 +1030,16 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     // loop
     if (const auto* lp = dynamic_cast<const ast::LoopStmt*>(&stmt)) {
         bool prev_in_loop = in_loop_;
+        bool prev_break_found = break_found_;
         in_loop_ = true;
+        break_found_ = false;
+
         resolve_statement(*lp->body);
+
+        bool infinite = !break_found_;
         in_loop_ = prev_in_loop;
-        return false; // Conservative — could return if it never breaks
+        break_found_ = prev_break_found;
+        return infinite;
     }
 
     // break
@@ -1034,6 +1047,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
         if (!in_loop_) {
             throw DiagnosticError("'break' used outside of loop", 0, 0);
         }
+        break_found_ = true;
         return false;
     }
 
@@ -1048,7 +1062,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     // expression statement
     if (const auto* es = dynamic_cast<const ast::ExprStmt*>(&stmt)) {
         resolve_expression(*es->expression);
-        return false;
+        return type_of(*es->expression).kind == TypeKind::Never;
     }
 
     // match statement
@@ -1356,6 +1370,10 @@ std::string Resolver::promote_integer_name(const std::string& a, const std::stri
 
 bool Resolver::are_types_compatible(const Type& target, const Type& source) const {
     if (target.kind == TypeKind::Unknown || source.kind == TypeKind::Unknown) {
+        return true;
+    }
+
+    if (source.kind == TypeKind::Never) {
         return true;
     }
 

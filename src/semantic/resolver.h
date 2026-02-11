@@ -66,6 +66,7 @@ class Resolver {
 
     // Loop context for break/continue
     bool in_loop_ = false;
+    bool break_found_ = false;
 
     // Match exhaustiveness: enum name -> list of variant names
     std::unordered_map<std::string, std::vector<std::string>> enum_variants_;

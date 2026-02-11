@@ -1,0 +1,19 @@
+func test_never_coercion() -> Int32 {
+    let x: Int32 = panic("error");
+    return x;
+}
+
+func test_infinite_loop() -> Int32 {
+    loop {
+        // no break
+    }
+}
+
+func test_panic_terminates() -> Void {
+    panic("abort");
+    let y: Int32 = 10; // This should be unreachable
+}
+
+func main() -> Void {
+    // This is just to satisfy the compiler if needed
+}
