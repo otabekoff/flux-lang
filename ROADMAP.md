@@ -56,11 +56,11 @@ Complete the resolver so that every language feature described in the spec is fu
 
 ### 1.3 Traits & Impls
 
-- [ ] **Trait conformance checking** — verify every `impl Display for Point` provides all required methods with correct signatures.
+- [x] **Trait conformance checking** — verify every `impl Display for Point` provides all required methods with correct signatures. (Tested in `trait_conformance.cpp`)
 - [ ] **Default method bodies** — allow traits to have default implementations.
 - [ ] **Trait method dispatch** — resolve `x.to_string()` through the trait impl, not just by name.
 - [ ] **Orphan rules** — prevent implementing foreign traits on foreign types.
-- [ ] **Impl method self-type validation** — check that `self` parameter type matches the impl target.
+- [x] **Impl method self-type validation** — check that `self` parameter type matches the impl target. (Includes `&self` and `&mut self` matching)
 
 ### 1.4 Ownership & Borrowing
 

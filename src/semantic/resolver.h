@@ -57,6 +57,7 @@ class Resolver {
     // Trait method signature for registry
     struct TraitMethodSig {
         std::string name;
+        std::string self_type;                // empty, "self", "&self", "&mut self"
         std::vector<std::string> param_types; // excluding self
         std::string return_type;
     };
@@ -113,6 +114,11 @@ class Resolver {
     const std::vector<TypeInstantiation>& type_instantiations() const {
         return type_instantiations_;
     }
+
+    bool
+    compare_signatures(const TraitMethodSig& trait_sig, const ast::FunctionDecl& impl_fn,
+                       const std::string& target_type,
+                       const std::unordered_map<std::string, std::string>& generic_mapping) const;
 
   private:
     static Type unknown() {

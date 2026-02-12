@@ -120,6 +120,10 @@ Type Resolver::type_from_name_internal(const std::string& name,
         return Type(TypeKind::Never, name);
     }
 
+    if (name == "Self" && !current_type_name_.empty()) {
+        return type_from_name_internal(current_type_name_, seen);
+    }
+
     // Enum types
     if (enum_variants_.contains(name)) {
         return {TypeKind::Enum, name};
@@ -1169,9 +1173,13 @@ void Resolver::resolve_module(const ast::Module& module) {
             TraitMethodSig sig;
             sig.name = m.name;
             sig.return_type = m.return_type;
-            for (const auto& p : m.params)
-                if (p.name != "self")
+            for (const auto& p : m.params) {
+                if (p.name == "self") {
+                    sig.self_type = p.type;
+                } else {
                     sig.param_types.push_back(p.type);
+                }
+            }
             sigs.push_back(std::move(sig));
         }
         trait_methods_[t.name] = std::move(sigs);
@@ -1221,20 +1229,21 @@ void Resolver::resolve_module(const ast::Module& module) {
                 assoc_mapping[assoc.name] = assoc.default_type;
             }
             // Perform trait conformance check (associated types)
-            std::string tb = impl.trait_name;
-            if (auto pos = tb.find('<'); pos != std::string::npos) {
-                tb = tb.substr(0, pos);
+            std::string trait_base = impl.trait_name;
+            if (auto pos = trait_base.find('<'); pos != std::string::npos) {
+                trait_base = trait_base.substr(0, pos);
             }
 
-            auto trait_assoc_it = trait_associated_types_.find(tb);
+            auto trait_assoc_it = trait_associated_types_.find(trait_base);
             if (trait_assoc_it != trait_associated_types_.end()) {
                 const auto& required_assocs = trait_assoc_it->second;
                 for (const auto& required : required_assocs) {
                     if (!assoc_mapping.contains(required)) {
-                        throw DiagnosticError("impl of trait '" + impl.trait_name + "' for type '" +
-                                                  impl.target_name +
-                                                  "' is missing associated type '" + required + "'",
-                                              0, 0);
+                        throw flux::DiagnosticError("impl of trait '" + impl.trait_name +
+                                                        "' for type '" + impl.target_name +
+                                                        "' is missing associated type '" +
+                                                        required + "'",
+                                                    0, 0);
                     }
                 }
             }
@@ -1242,23 +1251,70 @@ void Resolver::resolve_module(const ast::Module& module) {
             impl_associated_types_[std::make_pair(impl.target_name, impl.trait_name)] =
                 std::move(assoc_mapping);
 
-            // Check trait bounds
-            std::string trait_base = tb;
+            // 3. Perform trait conformance check (methods)
+            std::unordered_map<std::string, std::string> generic_mapping;
+            auto it_params = trait_type_params_.find(trait_base);
+            if (it_params != trait_type_params_.end()) {
+                Type trait_type = type_from_name(impl.trait_name);
+                if (!trait_type.generic_args.empty()) {
+                    std::vector<std::string> raw_params;
+                    for (const auto& p : it_params->second) {
+                        if (p.find(':') == std::string::npos)
+                            raw_params.push_back(p);
+                    }
+                    for (size_t i = 0; i < raw_params.size() && i < trait_type.generic_args.size();
+                         ++i) {
+                        generic_mapping[raw_params[i]] = trait_type.generic_args[i].name;
+                    }
+                }
+            }
 
+            auto trait_methods_it = trait_methods_.find(trait_base);
+            if (trait_methods_it != trait_methods_.end()) {
+                const auto& required_methods = trait_methods_it->second;
+                for (const auto& required : required_methods) {
+                    bool found = false;
+                    for (const auto& provided : impl.methods) {
+                        if (provided.name == required.name) {
+                            if (!compare_signatures(required, provided, impl.target_name,
+                                                    generic_mapping)) {
+                                throw flux::DiagnosticError(
+                                    "method '" + provided.name + "' in impl of '" +
+                                        impl.trait_name + "' for '" + impl.target_name +
+                                        "' has a signature mismatch with trait",
+                                    0, 0);
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        throw flux::DiagnosticError(
+                            "impl of trait '" + impl.trait_name + "' for type '" +
+                                impl.target_name + "' is missing method '" + required.name + "'",
+                            0, 0);
+                    }
+                }
+            }
+
+            // Check trait bounds
             auto it = trait_type_params_.find(trait_base);
             if (it != trait_type_params_.end()) {
                 Type trait_type = type_from_name(impl.trait_name);
                 if (!trait_type.generic_args.empty()) {
-                    std::vector<std::string> raw_params;
-                    for (const auto& p : it->second) {
-                        if (p.find(':') == std::string::npos)
-                            raw_params.push_back(p);
-                    }
+                    // Mapping already established above if it was needed for methods
+                    std::unordered_map<std::string, std::string> mapping = generic_mapping;
+                    if (mapping.empty()) {
+                        std::vector<std::string> raw_params;
+                        for (const auto& p : it->second) {
+                            if (p.find(':') == std::string::npos)
+                                raw_params.push_back(p);
+                        }
 
-                    std::unordered_map<std::string, std::string> mapping;
-                    for (size_t i = 0; i < raw_params.size() && i < trait_type.generic_args.size();
-                         ++i) {
-                        mapping[raw_params[i]] = trait_type.generic_args[i].name;
+                        for (size_t i = 0;
+                             i < raw_params.size() && i < trait_type.generic_args.size(); ++i) {
+                            mapping[raw_params[i]] = trait_type.generic_args[i].name;
+                        }
                     }
 
                     auto all_bounds = parse_type_param_bounds(it->second);
@@ -2083,6 +2139,61 @@ void Resolver::record_type_instantiation(const std::string& name, const std::vec
             return;
     }
     type_instantiations_.push_back(std::move(inst));
+}
+
+bool Resolver::compare_signatures(
+    const TraitMethodSig& trait_sig, const ast::FunctionDecl& impl_fn,
+    const std::string& target_type,
+    const std::unordered_map<std::string, std::string>& mapping) const {
+    // 1. Compare return type (with Self substitution)
+    std::string trait_ret = trait_sig.return_type;
+    if (trait_ret == "Self")
+        trait_ret = target_type;
+    for (const auto& [gen, concrete] : mapping) {
+        if (trait_ret == gen)
+            trait_ret = concrete;
+    }
+
+    if (trait_ret != impl_fn.return_type)
+        return false;
+
+    // 2. Compare receiver (self/&self/&mut self)
+    std::string impl_self_type;
+    std::vector<std::string> impl_param_types;
+    for (const auto& p : impl_fn.params) {
+        if (p.name == "self")
+            impl_self_type = p.type;
+        else
+            impl_param_types.push_back(p.type);
+    }
+
+    std::string trait_self = trait_sig.self_type;
+    if (trait_self.find("Self") != std::string::npos) {
+        auto pos = trait_self.find("Self");
+        trait_self.replace(pos, 4, target_type);
+    }
+
+    if (trait_self != impl_self_type)
+        return false;
+
+    // 3. Compare other parameters
+    if (trait_sig.param_types.size() != impl_param_types.size())
+        return false;
+
+    for (size_t i = 0; i < trait_sig.param_types.size(); ++i) {
+        std::string trait_p = trait_sig.param_types[i];
+        if (trait_p == "Self")
+            trait_p = target_type;
+        for (const auto& [gen, concrete] : mapping) {
+            if (trait_p == gen)
+                trait_p = concrete;
+        }
+
+        if (trait_p != impl_param_types[i])
+            return false;
+    }
+
+    return true;
 }
 
 } // namespace flux::semantic
