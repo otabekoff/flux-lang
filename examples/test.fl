@@ -9,5 +9,6 @@ func main() -> Void {
         Red => {}
         Green => {}
         Blue => {}
+
     }
 }

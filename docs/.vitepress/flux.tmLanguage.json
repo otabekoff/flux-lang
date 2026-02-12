@@ -8,12 +8,8 @@
             "include": "#comments"
         },
         {
-            "name": "storage.type.function.arrow.flux",
-            "match": "->"
-        },
-        {
-            "name": "keyword.control.match-arm.flux",
-            "match": "=>"
+            "name": "keyword.operator.arrow.flux",
+            "match": "->|=>"
         },
         {
             "include": "#annotations"

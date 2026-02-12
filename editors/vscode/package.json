@@ -28,6 +28,11 @@
         "url": "https://github.com/flux-lang/flux"
     },
     "contributes": {
+        "configurationDefaults": {
+            "[flux]": {
+                "editor.bracketPairColorization.enabled": false
+            }
+        },
         "languages": [
             {
                 "id": "flux",
