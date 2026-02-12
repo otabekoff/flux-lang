@@ -12,6 +12,9 @@
             "match": "->|=>"
         },
         {
+            "include": "#types"
+        },
+        {
             "include": "#annotations"
         },
         {
@@ -25,9 +28,6 @@
         },
         {
             "include": "#keywords"
-        },
-        {
-            "include": "#types"
         },
         {
             "include": "#constants"
