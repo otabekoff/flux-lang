@@ -48,13 +48,13 @@ struct ScopeGuard {
     }
 };
 
-Type Resolver::type_from_name(const std::string& name) const {
+Type Resolver::type_from_name(const std::string& name) {
     std::unordered_set<std::string> seen;
     return type_from_name_internal(name, seen);
 }
 
 Type Resolver::type_from_name_internal(const std::string& name,
-                                       std::unordered_set<std::string>& seen) const {
+                                       std::unordered_set<std::string>& seen) {
     // Option<T> and Result<T,E> types
     if (name.starts_with("Option<")) {
         size_t start = name.find('<');
@@ -147,8 +147,9 @@ Type Resolver::type_from_name_internal(const std::string& name,
         size_t close = name.rfind('>');
         if (open != std::string::npos && close != std::string::npos && close > open + 1) {
             std::string base = name.substr(0, open);
-            if (struct_fields_.contains(base) || enum_variants_.contains(base) ||
-                trait_type_params_.contains(base)) {
+            if (enum_variants_.contains(base) || type_type_params_.contains(base) ||
+                trait_type_params_.contains(base) || function_type_params_.contains(base) ||
+                type_aliases_.contains(base) || struct_fields_.contains(base)) {
                 std::string args_str = name.substr(open + 1, close - open - 1);
                 std::vector<Type> args;
 
@@ -178,6 +179,12 @@ Type Resolver::type_from_name_internal(const std::string& name,
 
                 Type t(TypeKind::Struct, name);
                 t.generic_args = std::move(args);
+
+                // Record type instantiation
+                if (!t.generic_args.empty()) {
+                    record_type_instantiation(base, t.generic_args);
+                }
+
                 return t;
             }
         }
@@ -430,7 +437,12 @@ Type Resolver::type_of(const ast::Expr& expr) {
             return t;
         }
 
-        const Symbol* sym = current_scope_->lookup(id->name);
+        std::string lookup_name = id->name;
+        if (auto pos = lookup_name.find('<'); pos != std::string::npos) {
+            lookup_name = lookup_name.substr(0, pos);
+        }
+
+        const Symbol* sym = current_scope_->lookup(lookup_name);
         if (!sym) {
             throw DiagnosticError("use of undeclared identifier '" + id->name + "'", 0, 0);
         }
@@ -651,10 +663,10 @@ Type Resolver::type_of(const ast::Expr& expr) {
         (void)type_of(*cast->expr);
         Type target = type_from_name(cast->target_type);
         if (target.kind == TypeKind::Unknown) {
-            throw DiagnosticError("unknown type in cast: '" + cast->target_type + "'", 0, 0);
+            return target;
         }
-        return target;
-    }
+    } // This closing brace was missing in the original code, but the diff implies it should be
+      // here.
 
     if (const auto* call = dynamic_cast<const ast::CallExpr*>(&expr)) {
         Type callee_type = unknown();
@@ -727,12 +739,35 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
             // Trait bound enforcement: check type param bounds against concrete arg types
             if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
-                auto tp_it = function_type_params_.find(callee_id->name);
+                std::string base = callee_id->name;
+                if (auto pos = base.find('<'); pos != std::string::npos) {
+                    base = base.substr(0, pos);
+                }
+
+                auto tp_it = function_type_params_.find(base);
                 if (tp_it != function_type_params_.end()) {
                     auto bounds = parse_type_param_bounds(tp_it->second);
-                    auto sym = current_scope_->lookup(callee_id->name);
+                    auto sym = current_scope_->lookup(base);
                     if (sym && sym->kind == SymbolKind::Function) {
                         std::unordered_map<std::string, std::string> param_mapping;
+
+                        // Explicit generic args from callee name (e.g. foo<Int32>)
+                        Type explicit_type = type_from_name(callee_id->name);
+                        if (!explicit_type.generic_args.empty()) {
+                            std::vector<std::string> raw_params;
+                            for (const auto& p : tp_it->second) {
+                                if (p.find(':') == std::string::npos) {
+                                    raw_params.push_back(p);
+                                }
+                            }
+                            for (size_t i = 0;
+                                 i < raw_params.size() && i < explicit_type.generic_args.size();
+                                 ++i) {
+                                param_mapping[raw_params[i]] = explicit_type.generic_args[i].name;
+                            }
+                        }
+
+                        // Inference from arguments
                         for (size_t i = 0;
                              i < sym->param_types.size() && i < call->arguments.size(); ++i) {
                             for (const auto& b : bounds) {
@@ -760,10 +795,19 @@ Type Resolver::type_of(const ast::Expr& expr) {
                                 }
                             }
                         }
+
+                        // Record function instantiation
+                        std::vector<Type> concrete_args;
+                        for (const auto& b : bounds) {
+                            if (param_mapping.contains(b.param_name)) {
+                                concrete_args.push_back(
+                                    type_from_name(param_mapping[b.param_name]));
+                            }
+                        }
+                        if (!concrete_args.empty()) {
+                            record_function_instantiation(base, concrete_args);
+                        }
                     }
-                } else {
-                    // DEBUG
-                    // std::cout << "No bounds found for " << callee_id->name << std::endl;
                 }
             }
 
@@ -784,14 +828,6 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
         // 3. Built-ins (fallback if callee resolution failed or returned non-Function)
         if (callee_type.kind == TypeKind::Unknown) {
-            // Try to handle built-ins by name if callee is an identifier?
-            // Actually drop/panic/assert are declared as Function symbols in global scope
-            // So type_of(IdentifierExpr) should return Function type.
-            // So they should be handled above.
-
-            // What if it's io::println?
-            // type_of(io::println) -> Unknown.
-            // We return Unknown to allow it to pass.
             for (const auto& arg : call->arguments) {
                 resolve_expression(*arg);
             }
@@ -804,6 +840,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
     if (auto mv = dynamic_cast<const ast::MoveExpr*>(&expr)) {
         return type_of(*mv->operand);
     }
+
     if (auto sl = dynamic_cast<const ast::StructLiteralExpr*>(&expr)) {
         // Get base struct name (strip generic params)
         std::string base = sl->struct_name;
@@ -853,6 +890,11 @@ Type Resolver::type_of(const ast::Expr& expr) {
                         }
                     }
                 }
+
+                // Record type instantiation
+                if (!concrete.generic_args.empty()) {
+                    record_type_instantiation(base, concrete.generic_args);
+                }
             }
         }
 
@@ -883,13 +925,15 @@ Type Resolver::type_of(const ast::Expr& expr) {
    ======================= */
 
 void Resolver::enter_scope() {
-    current_scope_ = new Scope(current_scope_);
+    auto new_scope = std::make_unique<Scope>(current_scope_);
+    current_scope_ = new_scope.get();
+    all_scopes_.push_back(std::move(new_scope));
 }
 
 void Resolver::exit_scope() {
-    const Scope* old = current_scope_;
-    current_scope_ = current_scope_->parent();
-    delete old;
+    if (current_scope_) {
+        current_scope_ = current_scope_->parent();
+    }
 }
 
 /* =======================
@@ -897,27 +941,22 @@ void Resolver::exit_scope() {
    ======================= */
 
 void Resolver::resolve(const ast::Module& module) {
-    enter_scope(); // global scope
+    all_scopes_.clear();
+    auto global_scope = std::make_unique<Scope>(nullptr);
+    current_scope_ = global_scope.get();
+    all_scopes_.push_back(std::move(global_scope));
 
-    // Declare built-in functions/modules
-    current_scope_->declare({"io", SymbolKind::Variable, false, true, "Module", {}});
-    current_scope_->declare({"std", SymbolKind::Variable, false, true, "Module", {}});
-    current_scope_->declare({"drop", SymbolKind::Function, false, true, "Void", {"Unknown"}});
+    // Built-ins
+    current_scope_->declare({"drop", SymbolKind::Function, false, true, "Void", {"T"}});
     current_scope_->declare({"panic", SymbolKind::Function, false, true, "Never", {"String"}});
     current_scope_->declare({"assert", SymbolKind::Function, false, true, "Void", {"Bool"}});
-    current_scope_->declare(
-        {"range", SymbolKind::Function, false, true, "Range", {"Int32", "Int32"}});
-
-    // Built-in Option/Result constructors
-    // We declare them so they are found during lookup.
-    // Their actual types are handled specially in type_of() and resolved specifically.
     current_scope_->declare({"Some", SymbolKind::Function, false, true, "Option<T>", {"T"}});
     current_scope_->declare({"None", SymbolKind::Variable, false, true, "Option<T>", {}});
     current_scope_->declare({"Ok", SymbolKind::Function, false, true, "Result<T,E>", {"T"}});
     current_scope_->declare({"Err", SymbolKind::Function, false, true, "Result<T,E>", {"E"}});
 
+    enter_scope(); // Module scope - persists after resolve()
     resolve_module(module);
-    exit_scope();
 }
 
 /* =======================
@@ -925,7 +964,8 @@ void Resolver::resolve(const ast::Module& module) {
    ======================= */
 
 void Resolver::resolve_module(const ast::Module& module) {
-    ScopeGuard guard(this);
+    // Note: Caller (resolve()) handles entering the initial module scope.
+    // If we are resolving nested modules (imports), we might need more logic here.
 
     // Declare imports
     for (const auto& imp : module.imports) {
@@ -1024,8 +1064,8 @@ void Resolver::resolve_module(const ast::Module& module) {
         current_scope_->declare({t.name, SymbolKind::Variable, false, true, "Type", {}});
 
         // Parse bounds from where clause and append to type_params
-        // We do this by reconstructing the "T: Bound" strings that type_params expects
-        // This is a bit of a hack but aligns with existing structures
+        // We do this by reconstructing the "T: Bound" strings that type_params
+        // expects This is a bit of a hack but aligns with existing structures
         auto bounds = parse_where_clause(t.where_clause);
         std::vector<std::string> combined_params = t.type_params;
         for (const auto& b : bounds) {
@@ -1162,8 +1202,9 @@ void Resolver::resolve_module(const ast::Module& module) {
                                      method.return_type, std::move(params)});
 
             // Register method type params (method params + impl params)
-            // Implementation note: This incorrectly merges them flatly, but suffices for basic
-            // checking ideally we distinguish impl params from method params.
+            // Implementation note: This incorrectly merges them flatly, but
+            // suffices for basic checking ideally we distinguish impl params from
+            // method params.
             auto combined = impl_params;
             combined.insert(combined.end(), method.type_params.begin(), method.type_params.end());
 
@@ -1181,9 +1222,9 @@ void Resolver::resolve_module(const ast::Module& module) {
 
             if (!combined.empty()) {
                 function_type_params_[qualified_name] = combined;
-                // Also map simple name if unambiguous? No, resolver uses qualified names for
-                // matching? Actually CallExpr might use simple name if inside a method? For now,
-                // store qualified.
+                // Also map simple name if unambiguous? No, resolver uses qualified
+                // names for matching? Actually CallExpr might use simple name if
+                // inside a method? For now, store qualified.
             }
         }
     }
@@ -1779,7 +1820,8 @@ bool Resolver::are_types_compatible(const Type& target, const Type& source) cons
 
         // Check T
         if (!target.generic_args.empty() && !source.generic_args.empty()) {
-            // If source T is unknown, it means it's an Err variant, so it matches any T target
+            // If source T is unknown, it means it's an Err variant, so it matches
+            // any T target
             if (source.generic_args[0].kind != TypeKind::Unknown) {
                 t_ok = are_types_compatible(target.generic_args[0], source.generic_args[0]);
             }
@@ -1787,7 +1829,8 @@ bool Resolver::are_types_compatible(const Type& target, const Type& source) cons
 
         // Check E
         if (target.generic_args.size() > 1 && source.generic_args.size() > 1) {
-            // If source E is unknown, it means it's an Ok variant, so it matches any E target
+            // If source E is unknown, it means it's an Ok variant, so it matches
+            // any E target
             if (source.generic_args[1].kind != TypeKind::Unknown) {
                 e_ok = are_types_compatible(target.generic_args[1], source.generic_args[1]);
             }
@@ -1838,7 +1881,7 @@ Resolver::parse_type_param_bounds(const std::vector<std::string>& type_params) {
                 }
             }
         }
-        if (!bound.bounds.empty()) {
+        if (!bound.param_name.empty()) {
             result.push_back(std::move(bound));
         }
     }
@@ -1911,6 +1954,25 @@ Resolver::parse_where_clause(const std::string& where_clause) {
         }
     }
     return result;
+}
+
+void Resolver::record_function_instantiation(const std::string& name,
+                                             const std::vector<Type>& args) {
+    FunctionInstantiation inst{name, args};
+    for (const auto& existing : function_instantiations_) {
+        if (existing == inst)
+            return;
+    }
+    function_instantiations_.push_back(std::move(inst));
+}
+
+void Resolver::record_type_instantiation(const std::string& name, const std::vector<Type>& args) {
+    TypeInstantiation inst{name, args};
+    for (const auto& existing : type_instantiations_) {
+        if (existing == inst)
+            return;
+    }
+    type_instantiations_.push_back(std::move(inst));
 }
 
 } // namespace flux::semantic

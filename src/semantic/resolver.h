@@ -39,7 +39,7 @@ class Resolver {
 
     Type type_of(const ast::Expr& expr);
 
-    Type type_from_name(const std::string& name) const;
+    Type type_from_name(const std::string& name);
 
   public:
     // Numeric helpers (public for testing and reuse)
@@ -66,6 +66,36 @@ class Resolver {
         std::vector<std::string> bounds;
     };
 
+    struct FunctionInstantiation {
+        std::string name;
+        std::vector<Type> args;
+
+        bool operator==(const FunctionInstantiation& other) const {
+            if (name != other.name || args.size() != other.args.size())
+                return false;
+            for (size_t i = 0; i < args.size(); ++i) {
+                if (args[i] != other.args[i])
+                    return false;
+            }
+            return true;
+        }
+    };
+
+    struct TypeInstantiation {
+        std::string name;
+        std::vector<Type> args;
+
+        bool operator==(const TypeInstantiation& other) const {
+            if (name != other.name || args.size() != other.args.size())
+                return false;
+            for (size_t i = 0; i < args.size(); ++i) {
+                if (args[i] != other.args[i])
+                    return false;
+            }
+            return true;
+        }
+    };
+
     // Parse type_params strings into structured bounds
     static std::vector<TypeParamBound>
     parse_type_param_bounds(const std::vector<std::string>& type_params);
@@ -74,6 +104,13 @@ class Resolver {
 
     // Check if a type implements a trait
     bool type_implements_trait(const std::string& type_name, const std::string& trait_name) const;
+
+    const std::vector<FunctionInstantiation>& function_instantiations() const {
+        return function_instantiations_;
+    }
+    const std::vector<TypeInstantiation>& type_instantiations() const {
+        return type_instantiations_;
+    }
 
   private:
     static Type unknown() {
@@ -84,10 +121,13 @@ class Resolver {
     void resolve_pattern(const ast::Pattern& pattern);
 
     // internal recursive version with cycle detection
-    Type type_from_name_internal(const std::string& name,
-                                 std::unordered_set<std::string>& seen) const;
+    Type type_from_name_internal(const std::string& name, std::unordered_set<std::string>& seen);
+
+    void record_function_instantiation(const std::string& name, const std::vector<Type>& args);
+    void record_type_instantiation(const std::string& name, const std::vector<Type>& args);
 
   private:
+    std::vector<std::unique_ptr<Scope>> all_scopes_;
     Scope* current_scope_ = nullptr;
 
     // Needed for return analysis
@@ -121,6 +161,9 @@ class Resolver {
 
     // Struct/Class/Enum type params: type name -> type_params
     std::unordered_map<std::string, std::vector<std::string>> type_type_params_;
+
+    std::vector<FunctionInstantiation> function_instantiations_;
+    std::vector<TypeInstantiation> type_instantiations_;
 };
 } // namespace flux::semantic
 

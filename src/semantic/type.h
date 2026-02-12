@@ -62,6 +62,12 @@ struct Type {
     bool operator==(const Type& other) const {
         if (kind != other.kind || name != other.name || is_mut_ref != other.is_mut_ref)
             return false;
+        if (generic_args.size() != other.generic_args.size())
+            return false;
+        for (size_t i = 0; i < generic_args.size(); ++i) {
+            if (generic_args[i] != other.generic_args[i])
+                return false;
+        }
         if (kind == TypeKind::Function) {
             if (param_types.size() != other.param_types.size())
                 return false;
