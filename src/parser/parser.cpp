@@ -418,21 +418,37 @@ ast::ExprPtr Parser::parse_primary() {
             std::string target_type = parse_type();
             expr = std::make_unique<ast::CastExpr>(std::move(expr), target_type);
         } else if (peek().kind == TokenKind::LBracket) {
-            // Slice: expr[start:end]
+            // Index or Slice: expr[idx] or expr[start:end]
             advance(); // consume '['
+
+            // Check if it's a slice (starts with colon or has colon after expression)
+            bool is_slice = false;
             ast::ExprPtr start = nullptr;
             ast::ExprPtr end = nullptr;
-            if (peek().kind != TokenKind::Colon && peek().kind != TokenKind::RBracket) {
-                start = parse_expression();
-            }
+
             if (match(TokenKind::Colon)) {
+                is_slice = true;
                 if (peek().kind != TokenKind::RBracket) {
                     end = parse_expression();
                 }
+            } else {
+                start = parse_expression();
+                if (match(TokenKind::Colon)) {
+                    is_slice = true;
+                    if (peek().kind != TokenKind::RBracket) {
+                        end = parse_expression();
+                    }
+                }
             }
-            expect(TokenKind::RBracket, "expected ']' after slice");
-            expr =
-                std::make_unique<ast::SliceExpr>(std::move(expr), std::move(start), std::move(end));
+
+            expect(TokenKind::RBracket, "expected ']' after index or slice");
+
+            if (is_slice) {
+                expr = std::make_unique<ast::SliceExpr>(std::move(expr), std::move(start),
+                                                        std::move(end));
+            } else {
+                expr = std::make_unique<ast::IndexExpr>(std::move(expr), std::move(start));
+            }
         } else {
             break;
         }
@@ -1157,14 +1173,18 @@ std::string Parser::parse_type() {
         return type;
     }
 
-    // Array type: [T; N]
+    // Array type: [T; N] or Slice type: [T]
     if (peek().kind == TokenKind::LBracket) {
         advance();
         std::string element_type = parse_type();
-        expect(TokenKind::Semicolon, "expected ';' in array type");
-        Token size_tok = expect(TokenKind::Number, "expected array size");
-        expect(TokenKind::RBracket, "expected ']' after array size");
-        return "[" + element_type + ";" + size_tok.lexeme + "]";
+        if (match(TokenKind::Semicolon)) {
+            Token size_tok = expect(TokenKind::Number, "expected array size");
+            expect(TokenKind::RBracket, "expected ']' after array size");
+            return "[" + element_type + ";" + size_tok.lexeme + "]";
+        } else {
+            expect(TokenKind::RBracket, "expected ']' after element type");
+            return "[" + element_type + "]";
+        }
     }
 
     // Tuple type: (T1, T2, ...)

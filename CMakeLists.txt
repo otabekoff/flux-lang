@@ -80,6 +80,7 @@ add_flux_test(associated_types)
 add_flux_test(trait_conformance)
 add_flux_test(trait_default_methods)
 add_flux_test(trait_dispatch)
+add_flux_test(index_slice)
 
 
 # By this what we've earned?

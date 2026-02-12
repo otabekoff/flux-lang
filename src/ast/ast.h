@@ -156,6 +156,12 @@ struct SliceExpr : Expr {
         : array(std::move(arr)), start(std::move(s)), end(std::move(e)) {}
 };
 
+struct IndexExpr : Expr {
+    ExprPtr array;
+    ExprPtr index;
+    IndexExpr(ExprPtr arr, ExprPtr idx) : array(std::move(arr)), index(std::move(idx)) {}
+};
+
 /* =======================
    Statements
    ======================= */

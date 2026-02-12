@@ -476,6 +476,29 @@ void ASTPrinter::print_expression(const Expr& expr) {
         return;
     }
 
+    if (auto slc = dynamic_cast<const SliceExpr*>(&expr)) {
+        indent();
+        std::cout << "Slice\n";
+        indent_level_++;
+        print_expression(*slc->array);
+        if (slc->start)
+            print_expression(*slc->start);
+        if (slc->end)
+            print_expression(*slc->end);
+        indent_level_--;
+        return;
+    }
+
+    if (auto idx = dynamic_cast<const IndexExpr*>(&expr)) {
+        indent();
+        std::cout << "Index\n";
+        indent_level_++;
+        print_expression(*idx->array);
+        print_expression(*idx->index);
+        indent_level_--;
+        return;
+    }
+
     indent();
     std::cout << "<unknown expression>\n";
 }

@@ -259,3 +259,7 @@ fat and thin arrows -> and => should be fixed.
 ---
 
 $tests = Get-ChildItem "build\Debug\*.exe" | Where-Object { $_.Name -notin @("fluxc.exe") }; foreach ($t in $tests) { Write-Host "=== $($t.Name) ===" -ForegroundColor Cyan; & $t.FullName 2>&1 | Select-Object -Last 3; if ($LASTEXITCODE -ne 0) { Write-Host "FAILED!" -ForegroundColor Red } }
+
+ctest -C Debug --output-on-failure
+
+---

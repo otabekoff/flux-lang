@@ -289,24 +289,36 @@ Type Resolver::type_from_name_internal(const std::string& name,
         return {TypeKind::Ref, name};
     }
 
-    // Tuple types or Function types
+    // Array types: [T; N] or Slice types: [T]
     if (name.starts_with("[")) {
         size_t semicolon = name.rfind(';');
         size_t end = name.rfind(']');
-        if (semicolon != std::string::npos && end != std::string::npos && end > semicolon) {
-            std::string inner = name.substr(1, semicolon - 1);
-            std::string size_str = name.substr(semicolon + 1, end - semicolon - 1);
-            // Trim whitespace
-            size_t first = size_str.find_first_not_of(" \t\n");
-            if (first != std::string::npos) {
-                size_t last = size_str.find_last_not_of(" \t\n");
-                size_str = size_str.substr(first, last - first + 1);
-            }
+        if (end != std::string::npos) {
+            if (semicolon != std::string::npos && end > semicolon) {
+                // Array type: [T; N]
+                std::string inner = name.substr(1, semicolon - 1);
+                std::string size_str = name.substr(semicolon + 1, end - semicolon - 1);
+                // Trim inner
+                inner.erase(0, inner.find_first_not_of(" \t\n"));
+                inner.erase(inner.find_last_not_of(" \t\n") + 1);
 
-            Type value_type = type_from_name_internal(inner, seen);
-            if (value_type.kind != TypeKind::Unknown) {
-                std::string canonical_name = "[" + value_type.name + ";" + size_str + "]";
-                return {TypeKind::Array, canonical_name};
+                Type value_type = type_from_name_internal(inner, seen);
+                if (value_type.kind != TypeKind::Unknown) {
+                    std::string canonical_name = "[" + value_type.name + ";" + size_str + "]";
+                    return {TypeKind::Array, canonical_name};
+                }
+            } else if (semicolon == std::string::npos) {
+                // Slice type: [T]
+                std::string inner = name.substr(1, end - 1);
+                // Trim inner
+                inner.erase(0, inner.find_first_not_of(" \t\n"));
+                inner.erase(inner.find_last_not_of(" \t\n") + 1);
+
+                Type value_type = type_from_name_internal(inner, seen);
+                if (value_type.kind != TypeKind::Unknown) {
+                    std::string canonical_name = "[" + value_type.name + "]";
+                    return {TypeKind::Slice, canonical_name};
+                }
             }
         }
     }
@@ -437,22 +449,69 @@ Type Resolver::type_of(const ast::Expr& expr) {
     }
 
     if (auto slice = dynamic_cast<const ast::SliceExpr*>(&expr)) {
-        // The array part must be an array
         Type arr_type = type_of(*slice->array);
-        if (arr_type.kind != TypeKind::Array) {
-            throw DiagnosticError("slice base must be an array", 0, 0);
+        if (arr_type.kind != TypeKind::Array && arr_type.kind != TypeKind::Slice) {
+            throw DiagnosticError("slice base must be an array or slice", 0, 0);
         }
-        // Extract element type from array type name: [T;N] -> [T]
-        std::string elem_type;
-        auto lbrack = arr_type.name.find('[');
-        auto semi = arr_type.name.find(';');
-        if (lbrack != std::string::npos && semi != std::string::npos && semi > lbrack + 1) {
-            elem_type = arr_type.name.substr(lbrack + 1, semi - lbrack - 1);
+
+        // If it's an array [T; N] or slice [T], the result is a slice [T]
+        std::string elem_type_name;
+        if (arr_type.kind == TypeKind::Array) {
+            // [T; N] -> find T
+            auto lbrack = arr_type.name.find('[');
+            auto semi = arr_type.name.find(';');
+            if (lbrack != std::string::npos && semi != std::string::npos && semi > lbrack + 1) {
+                elem_type_name = arr_type.name.substr(lbrack + 1, semi - lbrack - 1);
+            } else {
+                elem_type_name = "Unknown";
+            }
         } else {
-            elem_type = "Unknown";
+            // [T] -> find T
+            auto lbrack = arr_type.name.find('[');
+            auto rbrack = arr_type.name.find(']');
+            if (lbrack != std::string::npos && rbrack != std::string::npos && rbrack > lbrack + 1) {
+                elem_type_name = arr_type.name.substr(lbrack + 1, rbrack - lbrack - 1);
+            } else {
+                elem_type_name = "Unknown";
+            }
         }
-        std::string name = "[" + elem_type + "]";
-        return {TypeKind::Slice, name};
+
+        return {TypeKind::Slice, "[" + elem_type_name + "]"};
+    }
+
+    if (auto idx = dynamic_cast<const ast::IndexExpr*>(&expr)) {
+        Type arr_type = type_of(*idx->array);
+        if (arr_type.kind != TypeKind::Array && arr_type.kind != TypeKind::Slice) {
+            throw DiagnosticError("index base must be an array or slice", 0, 0);
+        }
+
+        // Index type must be integer
+        Type index_type = type_of(*idx->index);
+        if (index_type.kind != TypeKind::Int && index_type.kind != TypeKind::Unknown) {
+            throw DiagnosticError("index must be an integer", 0, 0);
+        }
+
+        // Extract element type
+        std::string elem_type_name;
+        if (arr_type.kind == TypeKind::Array) {
+            auto lbrack = arr_type.name.find('[');
+            auto semi = arr_type.name.find(';');
+            if (lbrack != std::string::npos && semi != std::string::npos && semi > lbrack + 1) {
+                elem_type_name = arr_type.name.substr(lbrack + 1, semi - lbrack - 1);
+            } else {
+                elem_type_name = "Unknown";
+            }
+        } else {
+            auto lbrack = arr_type.name.find('[');
+            auto rbrack = arr_type.name.find(']');
+            if (lbrack != std::string::npos && rbrack != std::string::npos && rbrack > lbrack + 1) {
+                elem_type_name = arr_type.name.substr(lbrack + 1, rbrack - lbrack - 1);
+            } else {
+                elem_type_name = "Unknown";
+            }
+        }
+
+        return type_from_name(elem_type_name);
     }
 
     if (auto num = dynamic_cast<const ast::NumberExpr*>(&expr)) {
@@ -685,15 +744,6 @@ Type Resolver::type_of(const ast::Expr& expr) {
             throw DiagnosticError("right side of '.' must be an identifier", 0, 0);
         }
 
-        // Handle index access
-        if (bin->op == TokenKind::LBracket) {
-            Type lhs = type_of(*bin->left);
-            Type rhs = type_of(*bin->right);
-            if (lhs.kind == TypeKind::Never || rhs.kind == TypeKind::Never)
-                return never_type();
-            return unknown(); // Would need element type info
-        }
-
         Type lhs = type_of(*bin->left);
         Type rhs = type_of(*bin->right);
 
@@ -924,10 +974,22 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
                             // 3. Record the instantiation
                             std::vector<Type> concrete_args;
-                            for (const auto& b : bounds) {
-                                if (param_mapping.contains(b.param_name)) {
+                            for (const auto& p : tp_it->second) {
+                                std::string param_name = p;
+                                auto colon = param_name.find(':');
+                                if (colon != std::string::npos)
+                                    param_name = param_name.substr(0, colon);
+
+                                // Simple trim
+                                size_t first = param_name.find_first_not_of(" \t\n");
+                                if (first != std::string::npos) {
+                                    size_t last = param_name.find_last_not_of(" \t\n");
+                                    param_name = param_name.substr(first, last - first + 1);
+                                }
+
+                                if (param_mapping.contains(param_name)) {
                                     concrete_args.push_back(
-                                        type_from_name(param_mapping[b.param_name]));
+                                        type_from_name(param_mapping[param_name]));
                                 }
                             }
                             if (!concrete_args.empty()) {
@@ -1139,10 +1201,21 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
                         // Record function instantiation
                         std::vector<Type> concrete_args;
-                        for (const auto& b : bounds) {
-                            if (param_mapping.contains(b.param_name)) {
-                                concrete_args.push_back(
-                                    type_from_name(param_mapping[b.param_name]));
+                        for (const auto& p : tp_it->second) {
+                            std::string param_name = p;
+                            auto colon = param_name.find(':');
+                            if (colon != std::string::npos)
+                                param_name = param_name.substr(0, colon);
+
+                            // Simple trim
+                            size_t first = param_name.find_first_not_of(" \t\n");
+                            if (first != std::string::npos) {
+                                size_t last = param_name.find_last_not_of(" \t\n");
+                                param_name = param_name.substr(first, last - first + 1);
+                            }
+
+                            if (param_mapping.contains(param_name)) {
+                                concrete_args.push_back(type_from_name(param_mapping[param_name]));
                             }
                         }
                         if (!concrete_args.empty()) {
@@ -2322,7 +2395,7 @@ Resolver::parse_type_param_bounds(const std::vector<std::string>& type_params) {
                 }
             }
         }
-        if (!bound.param_name.empty()) {
+        if (!bound.param_name.empty() && !bound.bounds.empty()) {
             result.push_back(std::move(bound));
         }
     }
