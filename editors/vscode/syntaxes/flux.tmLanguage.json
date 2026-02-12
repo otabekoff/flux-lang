@@ -9,7 +9,6 @@
         "punctuation.bracket.square.flux",
         "punctuation.bracket.round.flux"
     ],
-    "unbalancedBracketScopes": ["keyword.operator.arrow.flux"],
     "patterns": [
         {
             "include": "#comments"
