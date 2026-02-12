@@ -14,47 +14,55 @@ Flux is a systems programming language focused on explicitness, safety, and pred
 - **Pattern matching** — Exhaustive, ergonomic pattern matching for control flow.
 - **Native performance** — Designed to map cleanly to LLVM and produce efficient native code.
 
-## Design Note (explicitness)
+## Key Features
 
-Flux intentionally forbids implicit type inference for `let` bindings and hidden conversions to preserve clarity and predictability. Code must state types explicitly, which helps auditing, tooling, and reasoning about ownership.
+- **Static Typing** — Every variable and parameter has an explicit type.
+- **Ownership & Borrowing** — Move semantics with `move`, `&` borrow, and `&mut` mutable borrow.
+- **Traits & Generics** — Interface-based polymorphism with monomorphization and **Associated Types**.
+- **Where Clauses** — Expressive generic constraints (e.g., `where T: Display + Clone`).
+- **Pattern Matching** — Exhaustive `match` with destructuring and guards.
+- **Async/Await** — Built-in concurrency support (frontend parsed and resolved).
+- **Monomorphization** — Automatic generation of concrete type/function instantiations.
 
-## Current Status
+## Repository Status
 
-This repository contains the Flux compiler frontend (lexer, parser, AST, and semantic resolver). The project is under active development — see `ROADMAP.md` for planned features, priorities, and known issues.
+This repository contains the Flux compiler frontend and semantic analysis engine.
+
+- [x] **Lexer/Parser** — Full syntax support for all features.
+- [x] **Semantic Analysis** — Scope resolution, type checking, trait bounds, and exhaustiveness.
+- [x] **Tooling** — VS Code extension for syntax highlighting and snippets.
+- [ ] **Code Generation** — LLVM-based backend (In Progress).
 
 ## Getting Started
 
-Prerequisites:
+### Prerequisites
 
-- C++20 toolchain (MSVC, GCC, or Clang)
-- CMake 3.26+
-- Bun (optional; for local JS tooling)
+- **C++20 toolchain** (MSVC 2022, GCC 13+, or Clang 17+)
+- **CMake 3.26+**
 
-### Build and Run (Debug/Release)
-
-- Use the VS Code tasks for building, testing, and running in both Debug and Release modes.
-- All build/test/run tasks are available in the VS Code task runner and launch menu.
-- No CMakePresets.json is required; all workflows use explicit --config Debug/Release for MSVC multi-config.
-- See `ROADMAP.md` for the up-to-date workflow and task details.
-
-Example (manual build):
+### Quick Build
 
 ```powershell
-cmake -B build -G Ninja
-cmake --build build --config Debug   # or --config Release
-ctest --test-dir build --output-on-failure -C Debug   # or -C Release
+# Configure and Build (Debug)
+cmake -B build
+cmake --build build --config Debug
+
+# Run Tests
+ctest --test-dir build --output-on-failure -C Debug
 ```
+
+For detailed instructions, see [docs/guide/installation.md](docs/guide/installation.md).
 
 ## Contributing
 
-See `CONTRIBUTING.md` for contribution guidelines. Use conventional commits. Husky + commitlint + lint-staged are configured to keep history clean and enforce quality checks.
+We use [conventional commits](https://www.conventionalcommits.org/). Please see `CONTRIBUTING.md` for our full contribution guidelines.
 
 ## Files of Interest
 
-- `src/` — compiler implementation (lexer / parser / resolver)
-- `examples/` — sample `.fl` programs
-- `docs/` — design notes and language specification drafts
-- `ROADMAP.md` — planned features and release plan
+- `src/` — Compiler implementation.
+- `examples/` — Sample Flux programs.
+- `docs/` — Language specification and user guides.
+- `ROADMAP.md` — Detailed project status and future plans.
 
 ## License
 

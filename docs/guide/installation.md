@@ -2,10 +2,10 @@
 
 ## Prerequisites
 
-- **CMake** ≥ 3.20
-- **Ninja** build system
-- **LLVM 21** development libraries
+- **CMake** ≥ 3.26
 - **C++20 compiler** (MSVC 2022, GCC 13+, or Clang 17+)
+- **Ninja** (optional but recommended for faster builds)
+- **Bun** (optional; required only for VS Code extension development)
 
 ## Building from Source
 
@@ -16,52 +16,60 @@ git clone https://github.com/flux-lang/flux.git
 cd flux
 ```
 
-### 2. Set up LLVM
-
-Download the LLVM 21 prebuilt development package and extract it to `llvm-dev/` in the project root:
-
-```bash
-# The CMake build expects LLVM at ./llvm-dev/
-# LLVMConfig.cmake should be at ./llvm-dev/lib/cmake/llvm/
-```
-
-### 3. Configure and build
+### 2. Configure and build
 
 #### Using VS Code Tasks (Recommended)
 
 - Open the project in VS Code.
-- Use the built-in tasks (Ctrl+Shift+B or Run Task) to build, test, and clean in Debug or Release mode.
-- All tasks and launch configurations are available for both Debug and Release.
-- No CMakePresets.json is required; all workflows use explicit --config Debug/Release for MSVC multi-config.
+- Use the built-in tasks (`Ctrl+Shift+B` or **Terminal > Run Task**) to build, test, and clean in **Debug** or **Release** mode.
+- All tasks and launch configurations are available for both configurations.
+- No `CMakePresets.json` is required; all workflows use explicit `--config Debug/Release` for MSVC multi-config.
 
-#### Manual Build
+#### Manual Build (Command Line)
+
+We recommend using the provided helper command to configure the build:
 
 ```powershell
-cmake -B build -G Ninja
-cmake --build build --config Debug   # or --config Release
-ctest --test-dir build --output-on-failure -C Debug   # or -C Release
+# Configure
+cmake -B build
+
+# Build the compiler
+cmake --build build --config Debug
+
+# Build and run all tests
+ctest --test-dir build --output-on-failure -C Debug
 ```
 
-### 4. Run tests
+To build for **Release**, simply swap `Debug` for `Release`.
+
+### 3. Verify installation
+
+After building, you can verify the compiler is working:
 
 ```powershell
-ctest --test-dir build --output-on-failure -C Debug   # or -C Release
-```
-
-### 5. Verify installation
-
-```powershell
-./build/Debug/flux.exe --version
+# Windows
 ./build/Debug/flux.exe examples/hello.fl --dump-tokens
-# or use the Release path for Release builds
+
+# Linux/macOS
+./build/Debug/flux examples/hello.fl --dump-tokens
 ```
 
 ## Editor Support
 
+### VS Code (Recommended)
+
 Install the Flux VS Code extension from `editors/vscode/` for syntax highlighting, snippets, and bracket matching.
 
+1. Navigate to the extension folder: `cd editors/vscode`
+2. Install dependencies: `bun install`
+3. Package and install:
+
 ```bash
-cd editors/vscode
 npx @vscode/vsce package
 code --install-extension flux-lang-0.1.0.vsix
 ```
+
+## Troubleshooting
+
+- **Missing C++20 support**: Ensure your compiler is up to date (MSVC 2022 v17.x, GCC 13+, or Clang 17+).
+- **CMake version**: We require CMake 3.26+ for modern module and dependency handling.

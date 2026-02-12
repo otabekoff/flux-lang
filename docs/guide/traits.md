@@ -81,3 +81,37 @@ func serialize<T: Serialize + Clone>(value: T) -> Vec<UInt8> {
     return copy.to_bytes();
 }
 ```
+
+## Associated Types
+
+Associated types allow traits to define placeholder types that are specified by the implementation:
+
+```flux
+trait Iterator {
+    type Item;
+    func next(self) -> Option<Item>;
+}
+
+struct Counter {
+    count: Int32,
+}
+
+impl Iterator for Counter {
+    type Item = Int32;
+
+    func next(self) -> Option<Int32> {
+        self.count = self.count + 1;
+        return Some(self.count);
+    }
+}
+```
+
+### Generic Associated Types
+
+You can refer to associated types in generic functions using the `::` syntax:
+
+```flux
+func collect_first<I: Iterator>(iter: I) -> Option<I::Item> {
+    return iter.next();
+}
+```

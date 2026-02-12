@@ -88,8 +88,31 @@ Flux supports reference types for both immutable and mutable borrows, similar to
 
 ### Example
 
-```
+```flux
 let x: Int32 = 42;
 let y: &Int32 = &x;        // Immutable reference
 let z: &mut Int32 = &mut x; // Mutable reference
 ```
+
+## Associated Types
+
+Associated types are placeholder types defined within a trait. They are resolved to concrete types in an implementation.
+
+### Syntax
+
+Inside a trait:
+
+```flux
+type Name;
+```
+
+Inside an implementation:
+
+```flux
+type Name = ConcreteType;
+```
+
+### Representation
+
+- **Generic Hook**: In generic contexts, an associated type `T::Item` is treated as a `Generic` kind until concrete monomorphization occurs.
+- **Resolution**: The resolver tracks mappings in `trait_associated_types_` and `impl_associated_types_`.
