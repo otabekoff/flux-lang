@@ -324,6 +324,7 @@ struct FunctionDecl : Node {
     Block body;
     bool is_public = false;
     bool is_async = false;
+    bool has_body = false;
     std::string where_clause; // raw string for now
 };
 

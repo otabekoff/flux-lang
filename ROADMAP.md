@@ -57,8 +57,8 @@ Complete the resolver so that every language feature described in the spec is fu
 ### 1.3 Traits & Impls
 
 - [x] **Trait conformance checking** — verify every `impl Display for Point` provides all required methods with correct signatures. (Tested in `trait_conformance.cpp`)
-- [ ] **Default method bodies** — allow traits to have default implementations.
-- [ ] **Trait method dispatch** — resolve `x.to_string()` through the trait impl, not just by name.
+- [x] **Default method bodies** — allow traits to have default implementations. (Tested in `trait_default_methods.cpp`)
+- [x] **Trait method dispatch** — resolve `x.to_string()` through the trait impl, not just by name. (Complete, supports inherent/trait methods, references, and generics)
 - [ ] **Orphan rules** — prevent implementing foreign traits on foreign types.
 - [x] **Impl method self-type validation** — check that `self` parameter type matches the impl target. (Includes `&self` and `&mut self` matching)
 

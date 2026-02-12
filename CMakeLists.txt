@@ -78,6 +78,8 @@ add_flux_test(where_clause)
 add_flux_test(monomorphization)
 add_flux_test(associated_types)
 add_flux_test(trait_conformance)
+add_flux_test(trait_default_methods)
+add_flux_test(trait_dispatch)
 
 
 # By this what we've earned?

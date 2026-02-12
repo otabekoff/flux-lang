@@ -55,6 +55,12 @@ Type Resolver::type_from_name(const std::string& name) {
 
 Type Resolver::type_from_name_internal(const std::string& name,
                                        std::unordered_set<std::string>& seen) {
+    // Check substitution map for generic type parameters
+    auto sub_it = substitution_map_.find(name);
+    if (sub_it != substitution_map_.end()) {
+        return sub_it->second;
+    }
+
     // Option<T> and Result<T,E> types
     if (name.starts_with("Option<")) {
         size_t start = name.find('<');
@@ -623,6 +629,43 @@ Type Resolver::type_of(const ast::Expr& expr) {
                     }
                 }
 
+                // 3. Try method lookup in scope (qualified name: Type::Method)
+                std::string base_type_name = lhs.name;
+                // Strip references (&Person -> Person)
+                if (base_type_name.starts_with("&mut ")) {
+                    base_type_name = base_type_name.substr(5);
+                } else if (base_type_name.starts_with("&")) {
+                    base_type_name = base_type_name.substr(1);
+                }
+                // Strip generic arguments (Person<T> -> Person)
+                if (auto pos = base_type_name.find('<'); pos != std::string::npos) {
+                    base_type_name = base_type_name.substr(0, pos);
+                }
+
+                std::string qualified_name = base_type_name + "::" + field_name;
+                if (const Symbol* sym = current_scope_->lookup(qualified_name)) {
+                    if (sym->kind == SymbolKind::Function) {
+                        std::vector<Type> params;
+                        // Skip the first parameter (implicit 'self')
+                        for (size_t i = 1; i < sym->param_types.size(); ++i) {
+                            params.push_back(type_from_name(sym->param_types[i]));
+                        }
+                        Type ret_type = type_from_name(sym->type);
+
+                        // Construct a descriptive signature for the bound method
+                        std::string fn_signature = "(";
+                        for (size_t i = 0; i < params.size(); ++i) {
+                            if (i > 0)
+                                fn_signature += ", ";
+                            fn_signature += params[i].name;
+                        }
+                        fn_signature += ") -> " + ret_type.name;
+
+                        return Type(TypeKind::Function, fn_signature, false, std::move(params),
+                                    std::make_unique<Type>(std::move(ret_type)));
+                    }
+                }
+
                 // If lhs is an identifier referring to a variable, try to lookup its declared type
                 if (auto lhs_id = dynamic_cast<const ast::IdentifierExpr*>(bin->left.get())) {
                     if (const Symbol* sym = current_scope_->lookup(lhs_id->name)) {
@@ -632,11 +675,11 @@ Type Resolver::type_of(const ast::Expr& expr) {
                     }
                 }
 
-                // Could also handle more complex receivers (calls returning structs, etc.)
-                return unknown();
+                throw DiagnosticError(
+                    "type '" + lhs.name + "' has no field or method '" + field_name + "'", 0, 0);
             }
 
-            return unknown();
+            throw DiagnosticError("right side of '.' must be an identifier", 0, 0);
         }
 
         // Handle index access
@@ -767,6 +810,133 @@ Type Resolver::type_of(const ast::Expr& expr) {
             // Fallback
         }
 
+        // Record method call instantiations for dot-access calls.
+        // type_of for dot-access returns the method's return type, not TypeKind::Function,
+        // so the recording block inside the Function check below is never reached.
+        if (auto bin = dynamic_cast<const ast::BinaryExpr*>(call->callee.get())) {
+            if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
+
+                try {
+                    Type lhs_type = type_of(*bin->left);
+                    std::string lhs_name = lhs_type.name;
+                    if (lhs_name.starts_with("&mut "))
+                        lhs_name = lhs_name.substr(5);
+                    else if (lhs_name.starts_with("&"))
+                        lhs_name = lhs_name.substr(1);
+
+                    std::string lhs_base = lhs_name;
+                    if (auto pos = lhs_base.find('<'); pos != std::string::npos)
+                        lhs_base = lhs_base.substr(0, pos);
+
+                    if (auto rhs_id = dynamic_cast<const ast::IdentifierExpr*>(bin->right.get())) {
+                        std::string callee_name = rhs_id->name;
+                        std::string method_name = callee_name;
+                        if (auto pos = method_name.find('<'); pos != std::string::npos)
+                            method_name = method_name.substr(0, pos);
+                        std::string qualified = lhs_base + "::" + method_name;
+
+                        auto tp_it = function_type_params_.find(qualified);
+                        if (tp_it != function_type_params_.end()) {
+                            auto bounds = parse_type_param_bounds(tp_it->second);
+                            std::unordered_map<std::string, std::string> param_mapping;
+
+                            // 1. Map struct type params from LHS receiver type
+                            if (!lhs_type.generic_args.empty()) {
+                                auto it = type_type_params_.find(lhs_base);
+                                if (it != type_type_params_.end()) {
+                                    std::vector<std::string> raw;
+                                    for (const auto& p : it->second) {
+                                        if (p.find(':') == std::string::npos)
+                                            raw.push_back(p);
+                                    }
+                                    for (size_t i = 0;
+                                         i < raw.size() && i < lhs_type.generic_args.size(); ++i) {
+                                        param_mapping[raw[i]] = lhs_type.generic_args[i].name;
+                                    }
+                                }
+                            } else if (!substitution_map_.empty()) {
+                                // During monomorphization, 'self' has bare type (e.g. Wrapper)
+                                // without generic args. Use the current substitution_map_ to
+                                // fill in concrete types for struct type params.
+                                auto it = type_type_params_.find(lhs_base);
+                                if (it != type_type_params_.end()) {
+                                    for (const auto& p : it->second) {
+                                        if (p.find(':') == std::string::npos &&
+                                            substitution_map_.contains(p)) {
+                                            param_mapping[p] = substitution_map_[p].name;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 2. Map method's own type params from explicit generic args
+                            // Parse generic args from callee_name manually since type_from_name
+                            // cannot resolve function names that aren't registered type names.
+                            std::vector<Type> explicit_args;
+                            if (auto angle = callee_name.find('<'); angle != std::string::npos) {
+                                std::string args_str = callee_name.substr(angle + 1);
+                                if (!args_str.empty() && args_str.back() == '>')
+                                    args_str.pop_back();
+                                // Split by comma respecting nested angle brackets
+                                int depth = 0;
+                                std::string current;
+                                for (char c : args_str) {
+                                    if (c == '<')
+                                        depth++;
+                                    else if (c == '>')
+                                        depth--;
+                                    else if (c == ',' && depth == 0) {
+                                        if (!current.empty())
+                                            explicit_args.push_back(type_from_name(current));
+                                        current.clear();
+                                        continue;
+                                    }
+                                    current += c;
+                                }
+                                if (!current.empty())
+                                    explicit_args.push_back(type_from_name(current));
+                            }
+                            if (!explicit_args.empty()) {
+                                std::vector<std::string> all_raw;
+                                for (const auto& p : tp_it->second) {
+                                    if (p.find(':') == std::string::npos)
+                                        all_raw.push_back(p);
+                                }
+                                // Offset past struct params
+                                size_t struct_count = 0;
+                                auto struct_it = type_type_params_.find(lhs_base);
+                                if (struct_it != type_type_params_.end()) {
+                                    for (const auto& p : struct_it->second) {
+                                        if (p.find(':') == std::string::npos)
+                                            struct_count++;
+                                    }
+                                }
+                                for (size_t i = 0; i < explicit_args.size() &&
+                                                   (i + struct_count) < all_raw.size();
+                                     ++i) {
+                                    param_mapping[all_raw[i + struct_count]] =
+                                        explicit_args[i].name;
+                                }
+                            }
+
+                            // 3. Record the instantiation
+                            std::vector<Type> concrete_args;
+                            for (const auto& b : bounds) {
+                                if (param_mapping.contains(b.param_name)) {
+                                    concrete_args.push_back(
+                                        type_from_name(param_mapping[b.param_name]));
+                                }
+                            }
+                            if (!concrete_args.empty()) {
+                                record_function_instantiation(qualified, concrete_args);
+                            }
+                        }
+                    }
+                } catch (...) {
+                }
+            }
+        }
+
         // Special handling for Option/Result constructors
         if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
             if (callee_id->name == "Some" && call->arguments.size() == 1) {
@@ -823,8 +993,34 @@ Type Resolver::type_of(const ast::Expr& expr) {
             }
 
             // Trait bound enforcement: check type param bounds against concrete arg types
+            std::string base;
+            std::string callee_full_name;
             if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
-                std::string base = callee_id->name;
+                base = callee_id->name;
+                callee_full_name = callee_id->name;
+            } else if (auto bin = dynamic_cast<const ast::BinaryExpr*>(call->callee.get())) {
+                if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
+                    Type lhs_type = type_of(*bin->left);
+                    std::string lhs_name = lhs_type.name;
+                    // Strip pointers and references
+                    if (lhs_name.starts_with("&mut "))
+                        lhs_name = lhs_name.substr(5);
+                    else if (lhs_name.starts_with("&"))
+                        lhs_name = lhs_name.substr(1);
+
+                    // Strip generics from the LHS type for qualified lookup
+                    if (auto pos = lhs_name.find('<'); pos != std::string::npos) {
+                        lhs_name = lhs_name.substr(0, pos);
+                    }
+
+                    if (auto rhs_id = dynamic_cast<const ast::IdentifierExpr*>(bin->right.get())) {
+                        callee_full_name = rhs_id->name;
+                        base = lhs_name + "::" + rhs_id->name;
+                    }
+                }
+            }
+
+            if (!base.empty()) {
                 if (auto pos = base.find('<'); pos != std::string::npos) {
                     base = base.substr(0, pos);
                 }
@@ -837,7 +1033,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                         std::unordered_map<std::string, std::string> param_mapping;
 
                         // Explicit generic args from callee name (e.g. foo<Int32>)
-                        Type explicit_type = type_from_name(callee_id->name);
+                        Type explicit_type = type_from_name(callee_full_name);
                         if (!explicit_type.generic_args.empty()) {
                             std::vector<std::string> raw_params;
                             for (const auto& p : tp_it->second) {
@@ -845,18 +1041,75 @@ Type Resolver::type_of(const ast::Expr& expr) {
                                     raw_params.push_back(p);
                                 }
                             }
-                            for (size_t i = 0;
-                                 i < raw_params.size() && i < explicit_type.generic_args.size();
+
+                            size_t offset = 0;
+
+                            // For methods, the first N params are from the struct/impl
+                            if (base.find("::") != std::string::npos) {
+                                std::string type_name = base.substr(0, base.rfind("::"));
+                                if (auto pos = type_name.find('<'); pos != std::string::npos)
+                                    type_name = type_name.substr(0, pos);
+
+                                auto struct_it = type_type_params_.find(type_name);
+                                if (struct_it != type_type_params_.end()) {
+                                    for (const auto& p : struct_it->second) {
+                                        if (p.find(':') == std::string::npos)
+                                            offset++;
+                                    }
+                                }
+                            }
+
+                            for (size_t i = 0; i < explicit_type.generic_args.size() &&
+                                               (i + offset) < raw_params.size();
                                  ++i) {
-                                param_mapping[raw_params[i]] = explicit_type.generic_args[i].name;
+                                param_mapping[raw_params[i + offset]] =
+                                    explicit_type.generic_args[i].name;
+                            }
+                        }
+
+                        // Inference from lhs (for methods like p.foo())
+                        if (auto bin = dynamic_cast<const ast::BinaryExpr*>(call->callee.get())) {
+                            if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
+                                Type lhs_type = type_of(*bin->left);
+                                if (!lhs_type.generic_args.empty()) {
+                                    // Extract base type name to get its type params
+                                    std::string lhs_base = lhs_type.name;
+                                    if (auto pos = lhs_base.find('<'); pos != std::string::npos)
+                                        lhs_base = lhs_base.substr(0, pos);
+
+                                    auto it = type_type_params_.find(lhs_base);
+                                    if (it != type_type_params_.end()) {
+                                        std::vector<std::string> raw_params;
+                                        for (const auto& p : it->second) {
+                                            if (p.find(':') == std::string::npos)
+                                                raw_params.push_back(p);
+                                        }
+                                        for (size_t i = 0; i < raw_params.size() &&
+                                                           i < lhs_type.generic_args.size();
+                                             ++i) {
+                                            param_mapping[raw_params[i]] =
+                                                lhs_type.generic_args[i].name;
+                                        }
+                                    }
+                                }
                             }
                         }
 
                         // Inference from arguments
-                        for (size_t i = 0;
-                             i < sym->param_types.size() && i < call->arguments.size(); ++i) {
+                        // Note: for methods, sym->param_types[0] is 'self', but call->arguments[0]
+                        // is the first REAL arg.
+                        size_t sym_offset = 0;
+                        if (auto bin = dynamic_cast<const ast::BinaryExpr*>(call->callee.get())) {
+                            if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
+                                sym_offset = 1;
+                            }
+                        }
+
+                        for (size_t i = 0; i < call->arguments.size() &&
+                                           (i + sym_offset) < sym->param_types.size();
+                             ++i) {
                             for (const auto& b : bounds) {
-                                if (sym->param_types[i] == b.param_name) {
+                                if (sym->param_types[i + sym_offset] == b.param_name) {
                                     Type arg_type = type_of(*call->arguments[i]);
                                     if (arg_type.kind != TypeKind::Unknown &&
                                         arg_type.kind != TypeKind::Never) {
@@ -983,7 +1236,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
             }
         }
 
-        return {TypeKind::Struct, sl->struct_name};
+        return type_from_name(sl->struct_name);
     }
 
     if (auto ep = dynamic_cast<const ast::ErrorPropagationExpr*>(&expr)) {
@@ -1042,6 +1295,9 @@ void Resolver::resolve(const ast::Module& module) {
 
     enter_scope(); // Module scope - persists after resolve()
     resolve_module(module);
+
+    // Monomorphization pass (Phase 2)
+    monomorphize_recursive();
 }
 
 /* =======================
@@ -1180,6 +1436,7 @@ void Resolver::resolve_module(const ast::Module& module) {
                     sig.param_types.push_back(p.type);
                 }
             }
+            sig.has_default = m.has_body;
             sigs.push_back(std::move(sig));
         }
         trait_methods_[t.name] = std::move(sigs);
@@ -1215,6 +1472,7 @@ void Resolver::resolve_module(const ast::Module& module) {
         if (!current_scope_->declare(sym)) {
             throw DiagnosticError("duplicate function '" + fn.name + "'", 0, 0);
         }
+        function_decls_[fn.name] = &fn;
     }
 
     // Declare impl methods (forward visibility) and register trait impls
@@ -1228,6 +1486,7 @@ void Resolver::resolve_module(const ast::Module& module) {
                 // For impls, the "default_type" field actually stores the target type
                 assoc_mapping[assoc.name] = assoc.default_type;
             }
+
             // Perform trait conformance check (associated types)
             std::string trait_base = impl.trait_name;
             if (auto pos = trait_base.find('<'); pos != std::string::npos) {
@@ -1288,104 +1547,72 @@ void Resolver::resolve_module(const ast::Module& module) {
                             break;
                         }
                     }
-                    if (!found) {
+                    if (!found && !required.has_default) {
                         throw flux::DiagnosticError(
                             "impl of trait '" + impl.trait_name + "' for type '" +
                                 impl.target_name + "' is missing method '" + required.name + "'",
                             0, 0);
                     }
                 }
-            }
 
-            // Check trait bounds
-            auto it = trait_type_params_.find(trait_base);
-            if (it != trait_type_params_.end()) {
-                Type trait_type = type_from_name(impl.trait_name);
-                if (!trait_type.generic_args.empty()) {
-                    // Mapping already established above if it was needed for methods
-                    std::unordered_map<std::string, std::string> mapping = generic_mapping;
-                    if (mapping.empty()) {
-                        std::vector<std::string> raw_params;
-                        for (const auto& p : it->second) {
-                            if (p.find(':') == std::string::npos)
-                                raw_params.push_back(p);
-                        }
-
-                        for (size_t i = 0;
-                             i < raw_params.size() && i < trait_type.generic_args.size(); ++i) {
-                            mapping[raw_params[i]] = trait_type.generic_args[i].name;
+                // 4. Register inherited trait methods (those with defaults not overridden)
+                for (const auto& trait_sig : required_methods) {
+                    bool overridden = false;
+                    for (const auto& provided : impl.methods) {
+                        if (provided.name == trait_sig.name) {
+                            overridden = true;
+                            break;
                         }
                     }
 
-                    auto all_bounds = parse_type_param_bounds(it->second);
-                    for (const auto& b : all_bounds) {
-                        if (mapping.contains(b.param_name)) {
-                            const std::string& arg_type = mapping.at(b.param_name);
-                            for (const auto& trait : b.bounds) {
-                                if (!type_implements_trait(arg_type, trait)) {
-                                    if (!has_generic_param(arg_type)) {
-                                        throw DiagnosticError(
-                                            "type '" + arg_type + "' does not implement trait '" +
-                                                trait + "' required by trait '" + trait_base + "'",
-                                            0, 0);
-                                    }
-                                }
-                            }
+                    if (!overridden && trait_sig.has_default) {
+                        std::string qualified_name = impl.target_name + "::" + trait_sig.name;
+
+                        // Substitute Self in signature
+                        std::string ret_type = trait_sig.return_type;
+                        if (ret_type == "Self")
+                            ret_type = impl.target_name;
+
+                        std::vector<std::string> params;
+                        for (auto p : trait_sig.param_types) {
+                            if (p == "Self")
+                                p = impl.target_name;
+                            params.push_back(p);
                         }
+
+                        current_scope_->declare({qualified_name, SymbolKind::Function, false, true,
+                                                 ret_type, std::move(params)});
                     }
                 }
             }
         }
 
-        // Parse impl bounds
-        auto impl_bounds = parse_where_clause(impl.where_clause);
-        std::vector<std::string> impl_params = impl.type_params;
-        for (const auto& b : impl_bounds) {
-            std::string s = b.param_name + ": ";
-            for (size_t i = 0; i < b.bounds.size(); ++i) {
-                if (i > 0)
-                    s += " + ";
-                s += b.bounds[i];
-            }
-            impl_params.push_back(std::move(s));
-        }
-
+        // Declare all methods in the impl block in the scope (both trait and inherent)
         for (const auto& method : impl.methods) {
-            std::string qualified_name = impl.target_name + "::" + method.name;
+            std::string base_target = impl.target_name;
+            if (auto pos = base_target.find('<'); pos != std::string::npos) {
+                base_target = base_target.substr(0, pos);
+            }
+            std::string qualified_name = base_target + "::" + method.name;
+
+            // Combine impl type params and method type params
+            std::vector<std::string> combined_params = impl.type_params;
+            combined_params.insert(combined_params.end(), method.type_params.begin(),
+                                   method.type_params.end());
+            function_type_params_[qualified_name] = combined_params;
+
             std::vector<std::string> params;
-            for (const auto& p : method.params) {
-                if (p.name != "self") {
-                    params.push_back(p.type);
-                }
-            }
-            current_scope_->declare({qualified_name, SymbolKind::Function, false, true,
-                                     method.return_type, std::move(params)});
+            for (const auto& p : method.params)
+                params.push_back(p.type);
 
-            // Register method type params (method params + impl params)
-            // Implementation note: This incorrectly merges them flatly, but
-            // suffices for basic checking ideally we distinguish impl params from
-            // method params.
-            auto combined = impl_params;
-            combined.insert(combined.end(), method.type_params.begin(), method.type_params.end());
+            Symbol sym;
+            sym.name = qualified_name;
+            sym.kind = SymbolKind::Function;
+            sym.type = method.return_type;
+            sym.param_types = std::move(params);
 
-            // Also parse method's own where clause
-            auto method_bounds = parse_where_clause(method.where_clause);
-            for (const auto& b : method_bounds) {
-                std::string s = b.param_name + ": ";
-                for (size_t i = 0; i < b.bounds.size(); ++i) {
-                    if (i > 0)
-                        s += " + ";
-                    s += b.bounds[i];
-                }
-                combined.push_back(std::move(s));
-            }
-
-            if (!combined.empty()) {
-                function_type_params_[qualified_name] = combined;
-                // Also map simple name if unambiguous? No, resolver uses qualified
-                // names for matching? Actually CallExpr might use simple name if
-                // inside a method? For now, store qualified.
-            }
+            current_scope_->declare(sym);
+            function_decls_[qualified_name] = &method;
         }
     }
 
@@ -1394,22 +1621,35 @@ void Resolver::resolve_module(const ast::Module& module) {
         resolve_function(fn);
     }
 
-    // Resolve impl blocks
+    // Resolve impl method bodies
     for (const auto& impl : module.impls) {
-        for (const auto& method : impl.methods) {
-            std::string qualified_name = impl.target_name + "::" + method.name;
-            resolve_function(method, qualified_name);
+        std::string old_type = current_type_name_;
+        current_type_name_ = impl.target_name;
+
+        std::string base_target = impl.target_name;
+        if (auto pos = base_target.find('<'); pos != std::string::npos) {
+            base_target = base_target.substr(0, pos);
         }
+
+        for (const auto& method : impl.methods) {
+            resolve_function(method, base_target + "::" + method.name);
+        }
+
+        current_type_name_ = old_type;
     }
 }
 
-/* =======================
-   Function
-   ======================= */
-
 void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& name) {
+    std::string fn_name = name.empty() ? fn.name : name;
     std::string old_fn = current_function_name_;
-    current_function_name_ = name.empty() ? fn.name : name;
+    std::string old_type = current_type_name_;
+    current_function_name_ = fn_name;
+
+    // If this is a method (contains ::), set the current type name so 'Self' resolves correctly
+    if (fn_name.find("::") != std::string::npos) {
+        size_t pos = fn_name.rfind("::");
+        current_type_name_ = fn_name.substr(0, pos);
+    }
 
     ScopeGuard guard(this);
 
@@ -1437,6 +1677,7 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& 
     }
 
     current_function_name_ = old_fn;
+    current_type_name_ = old_type;
 }
 
 /* =======================
@@ -1555,7 +1796,8 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                 type_of(*asg->value);
             }
         } else {
-            // Complex target (field access, index access, etc.) — just resolve
+            // Complex target (field access, index access, etc.) — just
+            // resolve
             resolve_expression(*asg->target);
         }
 
@@ -1675,7 +1917,8 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                 seen_enum_variants.insert(vp->variant_name);
             } else if (const auto* ip =
                            dynamic_cast<const ast::IdentifierPattern*>(arm.pattern.get())) {
-                // Check if this identifier is an enum variant (bare variant name)
+                // Check if this identifier is an enum variant (bare variant
+                // name)
                 if (is_enum_variant(ip->name)) {
                     seen_enum_variants.insert(ip->name);
                 }
@@ -1910,7 +2153,6 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern) {
     // WildcardPattern is fine
 }
 
-// Numeric helpers for type name analysis and promotion
 bool Resolver::is_signed_int_name(const std::string& name) const {
     return name.starts_with("Int") && name != "IntPtr";
 }
@@ -1986,8 +2228,8 @@ bool Resolver::are_types_compatible(const Type& target, const Type& source) cons
 
         // Check T
         if (!target.generic_args.empty() && !source.generic_args.empty()) {
-            // If source T is unknown, it means it's an Err variant, so it matches
-            // any T target
+            // If source T is unknown, it means it's an Err variant, so it
+            // matches any T target
             if (source.generic_args[0].kind != TypeKind::Unknown) {
                 t_ok = are_types_compatible(target.generic_args[0], source.generic_args[0]);
             }
@@ -1995,8 +2237,8 @@ bool Resolver::are_types_compatible(const Type& target, const Type& source) cons
 
         // Check E
         if (target.generic_args.size() > 1 && source.generic_args.size() > 1) {
-            // If source E is unknown, it means it's an Ok variant, so it matches
-            // any E target
+            // If source E is unknown, it means it's an Ok variant, so it
+            // matches any E target
             if (source.generic_args[1].kind != TypeKind::Unknown) {
                 e_ok = are_types_compatible(target.generic_args[1], source.generic_args[1]);
             }
@@ -2194,6 +2436,41 @@ bool Resolver::compare_signatures(
     }
 
     return true;
+}
+
+void Resolver::monomorphize_recursive() {
+
+    size_t processed = 0;
+    while (processed < function_instantiations_.size()) {
+        auto inst = function_instantiations_[processed++];
+
+        const ast::FunctionDecl* fn = nullptr;
+        if (function_decls_.contains(inst.name)) {
+            fn = function_decls_.at(inst.name);
+        }
+
+        if (!fn)
+            continue;
+
+        // Setup substitution map for this specific instantiation
+        substitution_map_.clear();
+        auto it = function_type_params_.find(inst.name);
+        if (it != function_type_params_.end()) {
+            std::vector<std::string> raw_params;
+            for (const auto& p : it->second) {
+                if (p.find(':') == std::string::npos) {
+                    raw_params.push_back(p);
+                }
+            }
+            for (size_t i = 0; i < raw_params.size() && i < inst.args.size(); ++i) {
+                substitution_map_[raw_params[i]] = inst.args[i];
+            }
+        }
+
+        // Re-resolve function body with concrete types
+        // This will trigger additional record_function_instantiation calls for transitive calls
+        resolve_function(*fn, inst.name);
+    }
 }
 
 } // namespace flux::semantic

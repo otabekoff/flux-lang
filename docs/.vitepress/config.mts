@@ -90,7 +90,7 @@ export default defineConfig({
 
         footer: {
             message: 'Released under the MIT License.',
-            copyright: 'Copyright © 2025 Flux Contributors',
+            copyright: 'Copyright © 2025 <a href="/team">Flux Team & Contributors</a>',
         },
 
         search: {

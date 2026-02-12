@@ -60,6 +60,7 @@ class Resolver {
         std::string self_type;                // empty, "self", "&self", "&mut self"
         std::vector<std::string> param_types; // excluding self
         std::string return_type;
+        bool has_default = false;
     };
 
     // Parsed type parameter bound: "T: Display + Clone" → {param_name="T",
@@ -181,6 +182,12 @@ class Resolver {
     // Monomorphization tracking
     std::vector<FunctionInstantiation> function_instantiations_;
     std::vector<TypeInstantiation> type_instantiations_;
+
+    // Storage for recursive exploration
+    std::unordered_map<std::string, const ast::FunctionDecl*> function_decls_;
+    std::unordered_map<std::string, Type> substitution_map_;
+
+    void monomorphize_recursive();
 };
 } // namespace flux::semantic
 

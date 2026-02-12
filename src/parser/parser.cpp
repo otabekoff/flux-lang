@@ -58,7 +58,7 @@ static int precedence(TokenKind kind) {
    Core helpers
    ======================= */
 
-Parser::Parser(const std::vector<Token>& tokens) : tokens_(tokens) {}
+Parser::Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
 
 const Token& Parser::peek(std::size_t offset) const {
     if (current_ + offset >= tokens_.size())
@@ -288,13 +288,61 @@ ast::ExprPtr Parser::parse_primary() {
     // Suffixes: ::, ., (, {, ?, as, [, slice
     while (true) {
         if (match(TokenKind::ColonColon)) {
-            const std::string member =
+            std::string member =
                 expect(TokenKind::Identifier, "expected member name after '::'").lexeme;
+            if (peek().kind == TokenKind::Less) {
+                // Peek ahead to see if it's a generic or just a Less operator
+                // Reuse logic from below or just call a helper
+                std::size_t saved = current_;
+                advance(); // <
+                std::string generic_part = "<";
+                bool is_generic = true;
+                try {
+                    do {
+                        generic_part += parse_type();
+                        if (match(TokenKind::Comma))
+                            generic_part += ", ";
+                    } while (peek().kind != TokenKind::Greater && !is_at_end());
+                    if (peek().kind == TokenKind::Greater) {
+                        generic_part += advance().lexeme; // >
+                        member += generic_part;
+                    } else {
+                        is_generic = false;
+                    }
+                } catch (...) {
+                    is_generic = false;
+                }
+                if (!is_generic)
+                    current_ = saved;
+            }
             expr = std::make_unique<ast::BinaryExpr>(TokenKind::ColonColon, std::move(expr),
                                                      std::make_unique<ast::IdentifierExpr>(member));
         } else if (match(TokenKind::Dot)) {
-            const std::string member =
+            std::string member =
                 expect(TokenKind::Identifier, "expected member name after '.'").lexeme;
+            if (peek().kind == TokenKind::Less) {
+                std::size_t saved = current_;
+                advance(); // <
+                std::string generic_part = "<";
+                bool is_generic = true;
+                try {
+                    do {
+                        generic_part += parse_type();
+                        if (match(TokenKind::Comma))
+                            generic_part += ", ";
+                    } while (peek().kind != TokenKind::Greater && !is_at_end());
+                    if (peek().kind == TokenKind::Greater) {
+                        generic_part += advance().lexeme; // >
+                        member += generic_part;
+                    } else {
+                        is_generic = false;
+                    }
+                } catch (...) {
+                    is_generic = false;
+                }
+                if (!is_generic)
+                    current_ = saved;
+            }
             expr = std::make_unique<ast::BinaryExpr>(TokenKind::Dot, std::move(expr),
                                                      std::make_unique<ast::IdentifierExpr>(member));
         } else if (match(TokenKind::LParen)) {
@@ -324,7 +372,8 @@ ast::ExprPtr Parser::parse_primary() {
                             type += ", ";
                     } while (peek().kind != TokenKind::Greater && !is_at_end());
                     if (peek().kind == TokenKind::Greater) {
-                        type += expect(TokenKind::Greater, "expected '>'").lexeme;
+                        type += advance().lexeme; // >
+                        is_generic = true;
                     } else {
                         is_generic = false;
                     }
@@ -531,6 +580,7 @@ ast::FunctionDecl Parser::parse_function(bool is_public, bool is_async) {
     fn.name = expect(TokenKind::Identifier, "expected function name").lexeme;
     fn.type_params = parse_type_params();
 
+    // std::cout << "Parsing function: " << fn.name << std::endl;
     expect(TokenKind::LParen, "expected '('");
     if (peek().kind != TokenKind::RParen) {
         do {
@@ -553,17 +603,22 @@ ast::FunctionDecl Parser::parse_function(bool is_public, bool is_async) {
     }
     expect(TokenKind::RParen, "expected ')'");
 
-    expect(TokenKind::Arrow, "expected '->'");
-    fn.return_type = parse_type();
+    if (match(TokenKind::Arrow)) {
+        fn.return_type = parse_type();
+    } else {
+        fn.return_type = "Void";
+    }
 
     fn.where_clause = parse_where_clause();
 
     // Trait method signatures can end with ';' instead of a body
     if (match(TokenKind::Semicolon)) {
         // No body — trait method signature
+        fn.has_body = false;
         fn.body = ast::Block{};
     } else {
         fn.body = parse_block();
+        fn.has_body = true;
     }
     return fn;
 }

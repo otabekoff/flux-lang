@@ -8,7 +8,7 @@
 namespace flux {
 class Parser {
   public:
-    explicit Parser(const std::vector<Token>& tokens);
+    explicit Parser(std::vector<Token> tokens);
     ast::ExprPtr parse_expression(int min_prec = 0);
     ast::Module parse_module();
 
@@ -70,7 +70,7 @@ class Parser {
     bool check_visibility();
 
   private:
-    const std::vector<Token>& tokens_;
+    std::vector<Token> tokens_;
     std::size_t current_ = 0;
 };
 } // namespace flux
