@@ -104,8 +104,8 @@ export default defineConfig({
 
     markdown: {
         theme: {
-            light: 'github-light',
-            dark: 'github-dark',
+            light: 'light-plus',
+            dark: 'dark-plus',
         },
         languages: [
             {
