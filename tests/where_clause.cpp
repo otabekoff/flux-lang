@@ -42,7 +42,7 @@ void test_where_clause_function() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cout << "WhereClauseFunction: PASS" << std::endl;
     } catch (const DiagnosticError& e) {
         std::cerr << "WhereClauseFunction FAILED: " << e.what() << " at " << e.line() << ":"
@@ -109,7 +109,7 @@ void test_where_clause_fail() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cerr << "WhereClauseFail FAILED (should have thrown)" << std::endl;
         exit(1);
     } catch (const DiagnosticError& e) {
@@ -150,7 +150,7 @@ void test_struct_where_clause_fail() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cerr << "StructWhereClauseFail FAILED (should have thrown)" << std::endl;
         exit(1);
     } catch (const DiagnosticError& e) {
@@ -193,7 +193,7 @@ void test_trait_where_clause_fail() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cerr << "TraitWhereClauseFail FAILED (should have thrown)" << std::endl;
         exit(1);
     } catch (const DiagnosticError& e) {

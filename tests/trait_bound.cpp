@@ -86,7 +86,7 @@ void test_trait_bound_pass() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cout << "TraitBoundPass: PASS" << std::endl;
     } catch (const DiagnosticError& e) {
         std::cerr << "TraitBoundPass FAILED: " << e.what() << " at " << e.line() << ":"
@@ -123,7 +123,7 @@ void test_trait_bound_fail() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cerr << "TraitBoundFail FAILED (should have thrown)" << std::endl;
         exit(1);
     } catch (const DiagnosticError& e) {
@@ -174,7 +174,7 @@ void test_multi_bound_enforcement() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cerr << "MultiBoundEnforcement FAILED (should have thrown)" << std::endl;
         exit(1);
     } catch (const DiagnosticError& e) {

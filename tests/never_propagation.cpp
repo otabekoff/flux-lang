@@ -35,7 +35,7 @@ void test_never_propagation() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cout << "NeverPropagation: PASS" << std::endl;
     } catch (const DiagnosticError& e) {
         std::cerr << "NeverPropagation FAILED: " << e.what() << " at " << e.line() << ":"
@@ -61,7 +61,7 @@ void test_unreachable_code() {
         auto mod = parser.parse_module();
 
         Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cerr << "UnreachableCode FAILED (should have thrown)" << std::endl;
         exit(1);
     } catch (const DiagnosticError& e) {

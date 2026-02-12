@@ -29,7 +29,7 @@ void test_struct_field_access() {
                                                      std::make_unique<IdentifierExpr>("x"));
 
     Resolver resolver;
-    resolver.resolve_module(mod);
+    resolver.resolve(mod);
     Type t = resolver.type_of(*field_access);
     assert(t.kind == TypeKind::Int);
     assert(t.name == "Int32");

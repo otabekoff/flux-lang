@@ -55,6 +55,9 @@ Type Resolver::type_from_name(const std::string& name) {
 
 Type Resolver::type_from_name_internal(const std::string& name,
                                        std::unordered_set<std::string>& seen) {
+    if (name.empty()) {
+        return Type(TypeKind::Unknown, "");
+    }
     // Check substitution map for generic type parameters
     auto sub_it = substitution_map_.find(name);
     if (sub_it != substitution_map_.end()) {
@@ -1525,6 +1528,36 @@ void Resolver::resolve_module(const ast::Module& module) {
                          ++i) {
                         generic_mapping[raw_params[i]] = trait_type.generic_args[i].name;
                     }
+
+                    // Check trait bounds (including where clauses)
+                    auto bounds = parse_type_param_bounds(it_params->second);
+                    auto impl_bounds = parse_type_param_bounds(impl.type_params);
+                    std::unordered_set<std::string> impl_generics;
+                    for (const auto& b : impl_bounds)
+                        impl_generics.insert(b.param_name);
+
+                    for (const auto& b : bounds) {
+                        std::string concrete_type;
+                        if (b.param_name == "Self") {
+                            concrete_type = impl.target_name;
+                        } else if (generic_mapping.contains(b.param_name)) {
+                            concrete_type = generic_mapping.at(b.param_name);
+                        } else {
+                            continue;
+                        }
+
+                        if (impl_generics.contains(concrete_type))
+                            continue;
+
+                        for (const auto& req : b.bounds) {
+                            if (!type_implements_trait(concrete_type, req)) {
+                                throw DiagnosticError(
+                                    "type '" + concrete_type + "' does not implement trait '" +
+                                        req + "' required by trait '" + impl.trait_name + "'",
+                                    0, 0);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -2396,7 +2429,11 @@ bool Resolver::compare_signatures(
             trait_ret = concrete;
     }
 
-    if (trait_ret != impl_fn.return_type)
+    std::string impl_ret = impl_fn.return_type;
+    if (impl_ret == "Self")
+        impl_ret = target_type;
+
+    if (trait_ret != impl_ret)
         return false;
 
     // 2. Compare receiver (self/&self/&mut self)
@@ -2415,6 +2452,12 @@ bool Resolver::compare_signatures(
         trait_self.replace(pos, 4, target_type);
     }
 
+    // Substitute Self in impl_self_type too
+    if (impl_self_type.find("Self") != std::string::npos) {
+        auto pos = impl_self_type.find("Self");
+        impl_self_type.replace(pos, 4, target_type);
+    }
+
     if (trait_self != impl_self_type)
         return false;
 
@@ -2431,7 +2474,11 @@ bool Resolver::compare_signatures(
                 trait_p = concrete;
         }
 
-        if (trait_p != impl_param_types[i])
+        std::string impl_p = impl_param_types[i];
+        if (impl_p == "Self")
+            impl_p = target_type;
+
+        if (trait_p != impl_p)
             return false;
     }
 

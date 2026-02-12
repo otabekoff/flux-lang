@@ -1,0 +1,3 @@
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  flux_core.vcxproj -> D:\project\tutorial\flux\build\Debug\flux_core.lib

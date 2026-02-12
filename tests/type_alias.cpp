@@ -30,7 +30,7 @@ void test_recursive_resolution() {
 
         std::cout << "Resolving..." << std::endl;
         semantic::Resolver resolver;
-        resolver.resolve_module(mod);
+        resolver.resolve(mod);
         std::cout << "Returned from resolve_module" << std::endl;
         std::cout << "RecursiveResolution: PASS" << std::endl;
     } catch (const DiagnosticError& e) {
@@ -63,7 +63,7 @@ void test_circular_resolution() {
 
         semantic::Resolver resolver;
         try {
-            resolver.resolve_module(mod);
+            resolver.resolve(mod);
             std::cerr << "CircularResolution: FAILED (should have thrown)" << std::endl;
             exit(1);
         } catch (const DiagnosticError& e) {
