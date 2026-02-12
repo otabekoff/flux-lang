@@ -7,8 +7,8 @@
     "files.associations": {
         "*.fl": "flux"
     },
-    "editor.bracketPairColorization.enabled": false,
-    "editor.bracketPairColorization.independentColorPoolPerBracketType": false,
+    // "editor.bracketPairColorization.enabled": false,
+    // "editor.bracketPairColorization.independentColorPoolPerBracketType": false,
     "files.exclude": {
         "**/.git": true,
         "**/.svn": true,

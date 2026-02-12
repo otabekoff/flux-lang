@@ -3,6 +3,13 @@
     "name": "Flux",
     "scopeName": "source.flux",
     "fileTypes": ["fl"],
+    "balancedBracketScopes": [
+        "punctuation.bracket.angle.flux",
+        "punctuation.bracket.curly.flux",
+        "punctuation.bracket.square.flux",
+        "punctuation.bracket.round.flux"
+    ],
+    "unbalancedBracketScopes": ["keyword.operator.arrow.flux"],
     "patterns": [
         {
             "include": "#comments"
@@ -286,7 +293,7 @@
             "patterns": [
                 {
                     "name": "keyword.operator.comparison.flux",
-                    "match": "==|!=|<=|>=|<|>"
+                    "match": "==|!=|<=|>="
                 },
                 {
                     "name": "keyword.operator.assignment.compound.flux",
@@ -369,16 +376,20 @@
         "punctuation": {
             "patterns": [
                 {
-                    "name": "punctuation.brackets.curly.flux",
+                    "name": "punctuation.bracket.curly.flux",
                     "match": "[{}]"
                 },
                 {
-                    "name": "punctuation.brackets.round.flux",
+                    "name": "punctuation.bracket.round.flux",
                     "match": "[()]"
                 },
                 {
-                    "name": "punctuation.brackets.square.flux",
+                    "name": "punctuation.bracket.square.flux",
                     "match": "[\\[\\]]"
+                },
+                {
+                    "name": "punctuation.bracket.angle.flux",
+                    "match": "[<>]"
                 },
                 {
                     "name": "punctuation.comma.flux",
