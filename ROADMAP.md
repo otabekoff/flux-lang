@@ -51,7 +51,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Trait bound enforcement** — when a function declares `func foo<T: Display>(x: T)`, verify that the argument type implements `Display`. Supports single and multi-bounds (`T: Display + Clone`). Tested in `trait_bound.cpp`.
 - [x] 1.2 Implement **where clause validation** (generic function/struct definitions) like `where T: Ord + Clone`.
 - [x] **Monomorphization tracking** — record concrete instantiations of generic types/functions for codegen. Implemented with uniqueness checks and support for nested generics.
-- [ ] **Associated types** — `trait Iterator { type Item; }` and resolution in impl blocks.
+- [x] **Associated types** — `trait Iterator { type Item; }` and resolution in impl blocks.
 - [x] **Generic method resolution** — resolve calls like `Box<Int32>::new(42)` to the correct monomorphized impl method. (Handled via monomorphization tracking in `CallExpr`)
 
 ### 1.3 Traits & Impls

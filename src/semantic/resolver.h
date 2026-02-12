@@ -5,9 +5,11 @@
 #include "scope.h"
 #include "type.h"
 
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace flux::semantic {
@@ -24,7 +26,7 @@ class Resolver {
     // Structure
     void resolve_module(const ast::Module& module);
 
-    void resolve_function(const ast::FunctionDecl& fn);
+    void resolve_function(const ast::FunctionDecl& fn, const std::string& name = "");
 
     bool resolve_block(const ast::Block& block);
 
@@ -132,6 +134,8 @@ class Resolver {
 
     // Needed for return analysis
     Type current_function_return_type_{};
+    std::string current_function_name_;
+    std::string current_type_name_;
 
     // Loop context for break/continue
     bool in_loop_ = false;
@@ -153,15 +157,22 @@ class Resolver {
     // Impl registry: type name -> set of trait names it implements
     std::unordered_map<std::string, std::unordered_set<std::string>> trait_impls_;
 
+    // Generic bounds storage
     // Function type params: function name -> type_params (for bound enforcement at call sites)
     std::unordered_map<std::string, std::vector<std::string>> function_type_params_;
-
+    // Struct/Class/Enum type params: type name -> type_params
+    std::unordered_map<std::string, std::vector<std::string>> type_type_params_;
     // Trait type params: trait name -> type_params
     std::unordered_map<std::string, std::vector<std::string>> trait_type_params_;
 
-    // Struct/Class/Enum type params: type name -> type_params
-    std::unordered_map<std::string, std::vector<std::string>> type_type_params_;
+    // Associated types storage
+    // trait name -> vector of associated type names
+    std::unordered_map<std::string, std::vector<std::string>> trait_associated_types_;
+    // (target_type, trait_name) -> map of associated type name to concrete type name
+    std::map<std::pair<std::string, std::string>, std::unordered_map<std::string, std::string>>
+        impl_associated_types_;
 
+    // Monomorphization tracking
     std::vector<FunctionInstantiation> function_instantiations_;
     std::vector<TypeInstantiation> type_instantiations_;
 };

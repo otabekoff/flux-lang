@@ -23,6 +23,7 @@ enum class TypeKind {
     Unknown,
     Option,
     Result,
+    Generic,
 };
 
 struct Type {

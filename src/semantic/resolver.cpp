@@ -141,6 +141,87 @@ Type Resolver::type_from_name_internal(const std::string& name,
         return resolved;
     }
 
+    // Associated types (e.g., T::Item)
+    if (name.find("::") != std::string::npos) {
+        size_t pos = name.rfind("::");
+        std::string base_name = name.substr(0, pos);
+        std::string assoc_name = name.substr(pos + 2);
+
+        Type base_type = type_from_name_internal(base_name, seen);
+        if (base_type.kind != TypeKind::Unknown) {
+            // 1. Look for concrete impl mapping
+            auto it_range = trait_impls_.find(base_type.name);
+            if (it_range != trait_impls_.end()) {
+                for (const auto& trait : it_range->second) {
+                    auto it = impl_associated_types_.find(std::make_pair(base_type.name, trait));
+                    if (it != impl_associated_types_.end()) {
+                        auto assoc_it = it->second.find(assoc_name);
+                        if (assoc_it != it->second.end()) {
+                            return type_from_name_internal(assoc_it->second, seen);
+                        }
+                    }
+                }
+            }
+
+            // 2. Look in generic bounds if base_type is a generic param
+            std::vector<std::string> bounds;
+            if (!current_function_name_.empty() &&
+                function_type_params_.contains(current_function_name_)) {
+                for (const auto& p : function_type_params_.at(current_function_name_)) {
+                    if (p.starts_with(base_type.name + ":")) {
+                        // Extract traits from "T: Trait1 + Trait2"
+                        size_t colon = p.find(':');
+                        std::string traits_list = p.substr(colon + 1);
+                        // Simple split by '+' - could be more robust
+                        size_t start = 0;
+                        size_t plus = traits_list.find('+');
+                        while (plus != std::string::npos) {
+                            std::string t = traits_list.substr(start, plus - start);
+                            t.erase(0, t.find_first_not_of(" \t"));
+                            t.erase(t.find_last_not_of(" \t") + 1);
+                            bounds.push_back(t);
+                            start = plus + 1;
+                            plus = traits_list.find('+', start);
+                        }
+                        std::string t = traits_list.substr(start);
+                        t.erase(0, t.find_first_not_of(" \t"));
+                        t.erase(t.find_last_not_of(" \t") + 1);
+                        bounds.push_back(t);
+                    }
+                }
+            }
+
+            for (const auto& trait_bound : bounds) {
+                // Remove generic args from trait name for lookup: Trait<Arg> -> Trait
+                std::string trait_base = trait_bound;
+                if (auto b_pos = trait_base.find('<'); b_pos != std::string::npos) {
+                    trait_base = trait_base.substr(0, b_pos);
+                }
+
+                auto it = trait_associated_types_.find(trait_base);
+                if (it != trait_associated_types_.end()) {
+                    for (const auto& candidate : it->second) {
+                        if (candidate == assoc_name) {
+                            // In a generic context, we might keep it as T::Item
+                            // or resolve to a placeholder. For now, return a generic type
+                            // representing the associated type itself.
+                            return Type(TypeKind::Generic, name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Generic type parameters from scope
+    if (current_scope_) {
+        if (auto sym = current_scope_->lookup(name)) {
+            if (sym->kind == SymbolKind::Variable && sym->type == "Type") {
+                return Type(TypeKind::Generic, name);
+            }
+        }
+    }
+
     // Generic types (e.g., Box<Int32>)
     if (name.find('<') != std::string::npos) {
         size_t open = name.find('<');
@@ -1061,23 +1142,26 @@ void Resolver::resolve_module(const ast::Module& module) {
     }
 
     for (const auto& t : module.traits) {
-        current_scope_->declare({t.name, SymbolKind::Variable, false, true, "Type", {}});
-
-        // Parse bounds from where clause and append to type_params
-        // We do this by reconstructing the "T: Bound" strings that type_params
-        // expects This is a bit of a hack but aligns with existing structures
+        current_scope_->declare({t.name, SymbolKind::Variable, false, true, "Trait", {}});
         auto bounds = parse_where_clause(t.where_clause);
-        std::vector<std::string> combined_params = t.type_params;
+        std::vector<std::string> combined = t.type_params;
         for (const auto& b : bounds) {
-            std::string s = b.param_name + ": ";
+            std::string str = b.param_name + ": ";
             for (size_t i = 0; i < b.bounds.size(); ++i) {
                 if (i > 0)
-                    s += " + ";
-                s += b.bounds[i];
+                    str += " + ";
+                str += b.bounds[i];
             }
-            combined_params.push_back(std::move(s));
+            combined.push_back(std::move(str));
         }
-        trait_type_params_[t.name] = combined_params;
+        trait_type_params_[t.name] = std::move(combined);
+
+        // Store associated types
+        std::vector<std::string> assoc_names;
+        for (const auto& assoc : t.associated_types) {
+            assoc_names.push_back(assoc.name);
+        }
+        trait_associated_types_[t.name] = std::move(assoc_names);
 
         // Register trait method signatures
         std::vector<TraitMethodSig> sigs;
@@ -1127,21 +1211,41 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     // Declare impl methods (forward visibility) and register trait impls
     for (const auto& impl : module.impls) {
-        // Register trait impl
         if (!impl.trait_name.empty()) {
             trait_impls_[impl.target_name].insert(impl.trait_name);
 
-            // Check trait bounds
-            // e.g., impl Trait<Arg> for Type
-            // Extract base trait name and args
-            std::string trait_base = impl.trait_name;
-            if (auto pos = trait_base.find('<'); pos != std::string::npos) {
-                trait_base = trait_base.substr(0, pos);
+            // Store associated type mappings
+            std::unordered_map<std::string, std::string> assoc_mapping;
+            for (const auto& assoc : impl.associated_types) {
+                // For impls, the "default_type" field actually stores the target type
+                assoc_mapping[assoc.name] = assoc.default_type;
+            }
+            // Perform trait conformance check (associated types)
+            std::string tb = impl.trait_name;
+            if (auto pos = tb.find('<'); pos != std::string::npos) {
+                tb = tb.substr(0, pos);
             }
 
-            auto it = trait_type_params_.find(trait_base);
-            if (it == trait_type_params_.end()) {
+            auto trait_assoc_it = trait_associated_types_.find(tb);
+            if (trait_assoc_it != trait_associated_types_.end()) {
+                const auto& required_assocs = trait_assoc_it->second;
+                for (const auto& required : required_assocs) {
+                    if (!assoc_mapping.contains(required)) {
+                        throw DiagnosticError("impl of trait '" + impl.trait_name + "' for type '" +
+                                                  impl.target_name +
+                                                  "' is missing associated type '" + required + "'",
+                                              0, 0);
+                    }
+                }
             }
+
+            impl_associated_types_[std::make_pair(impl.target_name, impl.trait_name)] =
+                std::move(assoc_mapping);
+
+            // Check trait bounds
+            std::string trait_base = tb;
+
+            auto it = trait_type_params_.find(trait_base);
             if (it != trait_type_params_.end()) {
                 Type trait_type = type_from_name(impl.trait_name);
                 if (!trait_type.generic_args.empty()) {
@@ -1237,7 +1341,8 @@ void Resolver::resolve_module(const ast::Module& module) {
     // Resolve impl blocks
     for (const auto& impl : module.impls) {
         for (const auto& method : impl.methods) {
-            resolve_function(method);
+            std::string qualified_name = impl.target_name + "::" + method.name;
+            resolve_function(method, qualified_name);
         }
     }
 }
@@ -1246,7 +1351,10 @@ void Resolver::resolve_module(const ast::Module& module) {
    Function
    ======================= */
 
-void Resolver::resolve_function(const ast::FunctionDecl& fn) {
+void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& name) {
+    std::string old_fn = current_function_name_;
+    current_function_name_ = name.empty() ? fn.name : name;
+
     ScopeGuard guard(this);
 
     current_function_return_type_ = type_from_name(fn.return_type);
@@ -1271,6 +1379,8 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn) {
                                   current_function_return_type_.name + "'",
                               0, 0);
     }
+
+    current_function_name_ = old_fn;
 }
 
 /* =======================

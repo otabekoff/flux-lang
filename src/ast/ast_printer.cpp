@@ -150,6 +150,10 @@ void ASTPrinter::print_impl(const ImplBlock& impl) {
     }
     std::cout << " " << impl.target_name << '\n';
     indent_level_++;
+    for (const auto& assoc : impl.associated_types) {
+        indent();
+        std::cout << "AssociatedType " << assoc.name << " = " << assoc.default_type << '\n';
+    }
     for (const auto& m : impl.methods) {
         print_function(m);
     }
@@ -168,6 +172,14 @@ void ASTPrinter::print_trait(const TraitDecl& t) {
     }
     std::cout << '\n';
     indent_level_++;
+    for (const auto& assoc : t.associated_types) {
+        indent();
+        std::cout << "AssociatedType " << assoc.name;
+        if (!assoc.default_type.empty()) {
+            std::cout << " = " << assoc.default_type;
+        }
+        std::cout << '\n';
+    }
     for (const auto& m : t.methods) {
         print_function(m);
     }

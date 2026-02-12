@@ -208,6 +208,8 @@ cmake --build build --target flux -j 6
 `cmake --build D:\project\tutorial\flux\cmake-build-debug --target flux -j 6`
 
 `C:\Users\marko\AppData\Local\Programs\CLion\bin\cmake\win\x64\bin\cmake.exe --build D:\project\tutorial\flux\cmake-build-debug --target flux -j 6`
+
+cmake --build build --target flux -j 6
 ---
 
 Create official installers for win, macos/linux.

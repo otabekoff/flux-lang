@@ -308,6 +308,14 @@ struct Param {
     std::string type;
 };
 
+struct AssociatedType : Node {
+    std::string name;
+    std::string default_type; // Optional for trait declarations
+
+    AssociatedType(std::string n, std::string d = "")
+        : name(std::move(n)), default_type(std::move(d)) {}
+};
+
 struct FunctionDecl : Node {
     std::string name;
     std::vector<std::string> type_params;
@@ -373,6 +381,7 @@ struct ImplBlock : Node {
     std::string target_name;
     std::string trait_name; // empty if not a trait impl
     std::vector<FunctionDecl> methods;
+    std::vector<AssociatedType> associated_types;
     std::string where_clause; // raw string for now
 
     ImplBlock(std::vector<std::string> type_params, std::string target,
@@ -385,6 +394,7 @@ struct TraitDecl : Node {
     std::string name;
     std::vector<std::string> type_params;
     std::vector<FunctionDecl> methods; // potentially just signatures later
+    std::vector<AssociatedType> associated_types;
     bool is_public = false;
     std::string where_clause; // raw string for now
 

@@ -76,6 +76,7 @@ add_flux_test(never_propagation)
 add_flux_test(trait_bound)
 add_flux_test(where_clause)
 add_flux_test(monomorphization)
+add_flux_test(associated_types)
 
 
 # By this what we've earned?

@@ -971,12 +971,23 @@ ast::ImplBlock Parser::parse_impl_block() {
     expect(TokenKind::LBrace, "expected '{'");
 
     std::vector<ast::FunctionDecl> methods;
+    std::vector<ast::AssociatedType> associated_types;
     while (!match(TokenKind::RBrace)) {
         bool is_pub = false;
         if (check_visibility()) {
             if (peek().lexeme == "pub" || peek().lexeme == "public")
                 is_pub = true;
             advance();
+        }
+
+        if (peek().kind == TokenKind::Keyword && peek().lexeme == "type") {
+            advance(); // consume 'type'
+            std::string type_name = expect(TokenKind::Identifier, "expected type name").lexeme;
+            expect(TokenKind::Assign, "expected '='");
+            std::string target_type = parse_type();
+            expect(TokenKind::Semicolon, "expected ';'");
+            associated_types.push_back(ast::AssociatedType(type_name, target_type));
+            continue;
         }
 
         bool is_async_method = false;
@@ -990,6 +1001,7 @@ ast::ImplBlock Parser::parse_impl_block() {
 
     auto impl = ast::ImplBlock{std::move(type_params), target_name, std::move(methods)};
     impl.trait_name = trait_name;
+    impl.associated_types = std::move(associated_types);
     impl.where_clause = std::move(where_clause);
     return impl;
 }
@@ -1004,12 +1016,25 @@ ast::TraitDecl Parser::parse_trait_declaration(bool is_public) {
     expect(TokenKind::LBrace, "expected '{'");
 
     std::vector<ast::FunctionDecl> methods;
+    std::vector<ast::AssociatedType> associated_types;
     while (!match(TokenKind::RBrace)) {
-        methods.push_back(parse_function());
+        if (peek().kind == TokenKind::Keyword && peek().lexeme == "type") {
+            advance(); // consume 'type'
+            std::string type_name = expect(TokenKind::Identifier, "expected type name").lexeme;
+            std::string default_type;
+            if (match(TokenKind::Assign)) {
+                default_type = parse_type();
+            }
+            expect(TokenKind::Semicolon, "expected ';'");
+            associated_types.push_back(ast::AssociatedType(type_name, default_type));
+        } else {
+            methods.push_back(parse_function());
+        }
     }
 
     auto decl = ast::TraitDecl{name, std::move(type_params), std::move(methods)};
     decl.is_public = is_public;
+    decl.associated_types = std::move(associated_types);
     decl.where_clause = std::move(where_clause);
     return decl;
 }
