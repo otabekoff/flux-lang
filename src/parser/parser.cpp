@@ -866,6 +866,7 @@ ast::StructDecl Parser::parse_struct_declaration(bool is_public) {
     expect(TokenKind::Keyword, "expected 'struct'");
     const std::string name = expect(TokenKind::Identifier, "expected struct name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
+    std::string where_clause = parse_where_clause();
     expect(TokenKind::LBrace, "expected '{'");
 
     std::vector<ast::Field> fields;
@@ -885,6 +886,7 @@ ast::StructDecl Parser::parse_struct_declaration(bool is_public) {
 
     auto decl = ast::StructDecl{name, std::move(type_params), std::move(fields)};
     decl.is_public = is_public;
+    decl.where_clause = std::move(where_clause);
     return decl;
 }
 
@@ -892,6 +894,7 @@ ast::ClassDecl Parser::parse_class_declaration(bool is_public) {
     expect(TokenKind::Keyword, "expected 'class'");
     const std::string name = expect(TokenKind::Identifier, "expected class name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
+    std::string where_clause = parse_where_clause();
     expect(TokenKind::LBrace, "expected '{'");
 
     std::vector<ast::Field> fields;
@@ -911,6 +914,7 @@ ast::ClassDecl Parser::parse_class_declaration(bool is_public) {
 
     auto decl = ast::ClassDecl{name, std::move(type_params), std::move(fields)};
     decl.is_public = is_public;
+    decl.where_clause = std::move(where_clause);
     return decl;
 }
 
@@ -918,6 +922,7 @@ ast::EnumDecl Parser::parse_enum_declaration(bool is_public) {
     expect(TokenKind::Keyword, "expected 'enum'");
     const std::string name = expect(TokenKind::Identifier, "expected enum name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
+    std::string where_clause = parse_where_clause();
     expect(TokenKind::LBrace, "expected '{'");
 
     std::vector<ast::Variant> variants;
@@ -939,6 +944,7 @@ ast::EnumDecl Parser::parse_enum_declaration(bool is_public) {
 
     auto decl = ast::EnumDecl{name, std::move(type_params), std::move(variants)};
     decl.is_public = is_public;
+    decl.where_clause = std::move(where_clause);
     return decl;
 }
 
@@ -1004,6 +1010,7 @@ ast::TraitDecl Parser::parse_trait_declaration(bool is_public) {
 
     auto decl = ast::TraitDecl{name, std::move(type_params), std::move(methods)};
     decl.is_public = is_public;
+    decl.where_clause = std::move(where_clause);
     return decl;
 }
 

@@ -47,7 +47,7 @@
         ],
         "configurationDefaults": {
             "[flux]": {
-                "editor.bracketPairColorization.enabled": true
+                "editor.bracketPairColorization.enabled": false
             }
         },
         "grammars": [

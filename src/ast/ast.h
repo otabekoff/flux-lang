@@ -334,6 +334,7 @@ struct StructDecl : Node {
     std::vector<std::string> type_params;
     std::vector<Field> fields;
     bool is_public = false;
+    std::string where_clause;
 
     StructDecl(std::string name, std::vector<std::string> type_params, std::vector<Field> fields)
         : name(std::move(name)), type_params(std::move(type_params)), fields(std::move(fields)) {}
@@ -344,6 +345,7 @@ struct ClassDecl : Node {
     std::vector<std::string> type_params;
     std::vector<Field> fields;
     bool is_public = false;
+    std::string where_clause;
 
     ClassDecl(std::string name, std::vector<std::string> type_params, std::vector<Field> fields)
         : name(std::move(name)), type_params(std::move(type_params)), fields(std::move(fields)) {}
@@ -359,6 +361,7 @@ struct EnumDecl : Node {
     std::vector<std::string> type_params;
     std::vector<Variant> variants;
     bool is_public = false;
+    std::string where_clause;
 
     EnumDecl(std::string name, std::vector<std::string> type_params, std::vector<Variant> variants)
         : name(std::move(name)), type_params(std::move(type_params)),

@@ -115,6 +115,12 @@ class Resolver {
 
     // Function type params: function name -> type_params (for bound enforcement at call sites)
     std::unordered_map<std::string, std::vector<std::string>> function_type_params_;
+
+    // Trait type params: trait name -> type_params
+    std::unordered_map<std::string, std::vector<std::string>> trait_type_params_;
+
+    // Struct/Class/Enum type params: type name -> type_params
+    std::unordered_map<std::string, std::vector<std::string>> type_type_params_;
 };
 } // namespace flux::semantic
 

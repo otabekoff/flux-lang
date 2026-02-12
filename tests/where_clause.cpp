@@ -122,11 +122,98 @@ void test_where_clause_fail() {
     }
 }
 
+void test_struct_where_clause_fail() {
+    std::cout << "--- Testing struct where clause failure ---" << std::endl;
+
+    const std::string source = R"(
+        trait Display {
+            func to_string(self) -> String;
+        }
+
+        struct Printer<T> where T: Display {
+            val: T
+        }
+
+        struct Point { x: Int32, y: Int32 }
+
+        func main() -> Void {
+            let p: Point = Point { x: 1, y: 2 };
+            // Point does not implement Display, so Printer<Point> should fail
+            let pr: Printer<Point> = Printer<Point> { val: p };
+        }
+    )";
+
+    try {
+        Lexer lexer(source);
+        auto tokens = lexer.tokenize();
+        Parser parser(tokens);
+        auto mod = parser.parse_module();
+
+        Resolver resolver;
+        resolver.resolve_module(mod);
+        std::cerr << "StructWhereClauseFail FAILED (should have thrown)" << std::endl;
+        exit(1);
+    } catch (const DiagnosticError& e) {
+        if (std::string(e.what()).find("does not implement trait") != std::string::npos) {
+            std::cout << "StructWhereClauseFail: PASS (caught mismatch)" << std::endl;
+        } else {
+            std::cerr << "StructWhereClauseFail FAILED (wrong error: " << e.what() << ")"
+                      << std::endl;
+            exit(1);
+        }
+    }
+}
+
+void test_trait_where_clause_fail() {
+    std::cout << "--- Testing trait where clause failure ---" << std::endl;
+
+    const std::string source = R"(
+        trait Show {
+            func show(self) -> String;
+        }
+
+        trait Printer<T> where T: Show {
+            func print_val(self, val: T) -> Void;
+        }
+
+        struct Point { x: Int32, y: Int32 }
+
+        // Point does not implement Show, so impl Printer<Point> should fail
+        impl Printer<Point> for Point {
+            func print_val(self, val: Point) -> Void {}
+        }
+
+        func main() -> Void {}
+    )";
+
+    try {
+        Lexer lexer(source);
+        auto tokens = lexer.tokenize();
+        Parser parser(tokens);
+        auto mod = parser.parse_module();
+
+        Resolver resolver;
+        resolver.resolve_module(mod);
+        std::cerr << "TraitWhereClauseFail FAILED (should have thrown)" << std::endl;
+        exit(1);
+    } catch (const DiagnosticError& e) {
+        if (std::string(e.what()).find("does not implement trait") != std::string::npos) {
+            std::cout << "TraitWhereClauseFail: PASS (caught mismatch)" << std::endl;
+        } else {
+            std::cerr << "TraitWhereClauseFail FAILED (wrong error: " << e.what() << ")"
+                      << std::endl;
+            exit(1);
+        }
+    }
+}
+
 int main() {
     try {
         test_where_clause_function();
         test_where_clause_impl();
         test_where_clause_fail();
+        test_struct_where_clause_fail();
+        test_trait_where_clause_fail();
         std::cout << "\nwhere_clause: ALL TESTS PASSED" << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;

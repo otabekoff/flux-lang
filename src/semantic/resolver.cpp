@@ -2,6 +2,7 @@
 
 #include <ranges>
 
+#include "ast/ast.h"
 #include "lexer/diagnostic.h"
 #include "type.h"
 
@@ -10,6 +11,32 @@
 #include <unordered_set>
 
 namespace flux::semantic {
+
+// Helper to check if a type name references a generic type parameter
+static bool has_generic_param(const std::string& type_name) {
+    // Single uppercase letter is a generic param (T, U, V, etc.)
+    if (type_name.size() == 1 && std::isupper(type_name[0]))
+        return true;
+    // Reference to generic: &T, &mut T
+    if (type_name.find("&") != std::string::npos) {
+        // Check the non-reference part
+        auto pos = type_name.find_last_of("& ");
+        if (pos != std::string::npos) {
+            std::string inner = type_name.substr(pos + 1);
+            if (inner.size() == 1 && std::isupper(inner[0]))
+                return true;
+        }
+    }
+    // Generic with args: Box<T>
+    if (type_name.find("<") != std::string::npos) {
+        // This is simplified but covers most cases
+        return type_name.find("<T>") != std::string::npos ||
+               type_name.find(", T>") != std::string::npos ||
+               type_name.find("<U>") != std::string::npos ||
+               type_name.find(", U>") != std::string::npos;
+    }
+    return false;
+}
 
 struct ScopeGuard {
     Resolver* res;
@@ -116,9 +143,43 @@ Type Resolver::type_from_name_internal(const std::string& name,
 
     // Generic types (e.g., Box<Int32>)
     if (name.find('<') != std::string::npos) {
-        std::string base = name.substr(0, name.find('<'));
-        if (struct_fields_.contains(base) || enum_variants_.contains(base)) {
-            return {TypeKind::Struct, name};
+        size_t open = name.find('<');
+        size_t close = name.rfind('>');
+        if (open != std::string::npos && close != std::string::npos && close > open + 1) {
+            std::string base = name.substr(0, open);
+            if (struct_fields_.contains(base) || enum_variants_.contains(base) ||
+                trait_type_params_.contains(base)) {
+                std::string args_str = name.substr(open + 1, close - open - 1);
+                std::vector<Type> args;
+
+                // Split args by comma, respecting nested brackets
+                int depth = 0;
+                size_t start = 0;
+                for (size_t i = 0; i <= args_str.size(); ++i) {
+                    bool is_end = (i == args_str.size());
+                    if (!is_end) {
+                        if (args_str[i] == '<' || args_str[i] == '(' || args_str[i] == '[')
+                            depth++;
+                        else if (args_str[i] == '>' || args_str[i] == ')' || args_str[i] == ']')
+                            depth--;
+                    }
+
+                    if (is_end || (args_str[i] == ',' && depth == 0)) {
+                        std::string arg = args_str.substr(start, i - start);
+                        // trim
+                        arg.erase(0, arg.find_first_not_of(" \t\n"));
+                        arg.erase(arg.find_last_not_of(" \t\n") + 1);
+                        if (!arg.empty()) {
+                            args.push_back(type_from_name_internal(arg, seen));
+                        }
+                        start = i + 1;
+                    }
+                }
+
+                Type t(TypeKind::Struct, name);
+                t.generic_args = std::move(args);
+                return t;
+            }
         }
     }
 
@@ -743,7 +804,6 @@ Type Resolver::type_of(const ast::Expr& expr) {
     if (auto mv = dynamic_cast<const ast::MoveExpr*>(&expr)) {
         return type_of(*mv->operand);
     }
-
     if (auto sl = dynamic_cast<const ast::StructLiteralExpr*>(&expr)) {
         // Get base struct name (strip generic params)
         std::string base = sl->struct_name;
@@ -751,13 +811,49 @@ Type Resolver::type_of(const ast::Expr& expr) {
             base = base.substr(0, pos);
         }
 
-        if (struct_fields_.contains(base) || enum_variants_.contains(base)) {
+        if (!struct_fields_.contains(base) && !enum_variants_.contains(base) &&
+            !current_scope_->lookup(base)) {
             return {TypeKind::Struct, sl->struct_name};
         }
 
-        // Check scope
-        if (current_scope_->lookup(base)) {
-            return {TypeKind::Struct, sl->struct_name};
+        // Check generic bounds if any
+        auto tp_it = type_type_params_.find(base);
+        if (tp_it != type_type_params_.end()) {
+            auto bounds = parse_type_param_bounds(tp_it->second);
+            Type concrete = type_from_name(sl->struct_name);
+
+            // Map type param names to concrete types
+            if (concrete.generic_args.size() > 0) {
+                std::vector<std::string> raw_params;
+                for (const auto& p : tp_it->second) {
+                    if (p.find(':') == std::string::npos) {
+                        raw_params.push_back(p);
+                    }
+                }
+
+                std::unordered_map<std::string, std::string> mapping;
+                for (size_t i = 0; i < raw_params.size() && i < concrete.generic_args.size(); ++i) {
+                    mapping[raw_params[i]] = concrete.generic_args[i].name;
+                }
+
+                // Now check all bounds
+                auto all_bounds = parse_type_param_bounds(tp_it->second);
+                for (const auto& b : all_bounds) {
+                    if (mapping.contains(b.param_name)) {
+                        const std::string& arg_type = mapping.at(b.param_name);
+                        for (const auto& trait : b.bounds) {
+                            if (!type_implements_trait(arg_type, trait)) {
+                                if (!has_generic_param(arg_type)) {
+                                    throw DiagnosticError(
+                                        "type '" + arg_type + "' does not implement trait '" +
+                                            trait + "' required by struct '" + base + "'",
+                                        0, 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         return {TypeKind::Struct, sl->struct_name};
@@ -861,6 +957,20 @@ void Resolver::resolve_module(const ast::Module& module) {
             fields.push_back({f.name, f.type});
         }
         struct_fields_[s.name] = std::move(fields);
+
+        // Store type params for structs
+        auto bounds = parse_where_clause(s.where_clause);
+        std::vector<std::string> combined = s.type_params;
+        for (const auto& b : bounds) {
+            std::string str = b.param_name + ": ";
+            for (size_t i = 0; i < b.bounds.size(); ++i) {
+                if (i > 0)
+                    str += " + ";
+                str += b.bounds[i];
+            }
+            combined.push_back(std::move(str));
+        }
+        type_type_params_[s.name] = std::move(combined);
     }
 
     for (const auto& c : module.classes) {
@@ -870,6 +980,20 @@ void Resolver::resolve_module(const ast::Module& module) {
             fields.push_back({f.name, f.type});
         }
         struct_fields_[c.name] = std::move(fields);
+
+        // Store type params for classes
+        auto bounds = parse_where_clause(c.where_clause);
+        std::vector<std::string> combined = c.type_params;
+        for (const auto& b : bounds) {
+            std::string str = b.param_name + ": ";
+            for (size_t i = 0; i < b.bounds.size(); ++i) {
+                if (i > 0)
+                    str += " + ";
+                str += b.bounds[i];
+            }
+            combined.push_back(std::move(str));
+        }
+        type_type_params_[c.name] = std::move(combined);
     }
 
     for (const auto& e : module.enums) {
@@ -880,6 +1004,20 @@ void Resolver::resolve_module(const ast::Module& module) {
             vars.push_back(name);
         }
         enum_variants_[e.name] = std::move(vars);
+
+        // Store type params for enums
+        auto bounds = parse_where_clause(e.where_clause);
+        std::vector<std::string> combined = e.type_params;
+        for (const auto& b : bounds) {
+            std::string str = b.param_name + ": ";
+            for (size_t i = 0; i < b.bounds.size(); ++i) {
+                if (i > 0)
+                    str += " + ";
+                str += b.bounds[i];
+            }
+            combined.push_back(std::move(str));
+        }
+        type_type_params_[e.name] = std::move(combined);
     }
 
     for (const auto& t : module.traits) {
@@ -899,6 +1037,7 @@ void Resolver::resolve_module(const ast::Module& module) {
             }
             combined_params.push_back(std::move(s));
         }
+        trait_type_params_[t.name] = combined_params;
 
         // Register trait method signatures
         std::vector<TraitMethodSig> sigs;
@@ -951,6 +1090,51 @@ void Resolver::resolve_module(const ast::Module& module) {
         // Register trait impl
         if (!impl.trait_name.empty()) {
             trait_impls_[impl.target_name].insert(impl.trait_name);
+
+            // Check trait bounds
+            // e.g., impl Trait<Arg> for Type
+            // Extract base trait name and args
+            std::string trait_base = impl.trait_name;
+            if (auto pos = trait_base.find('<'); pos != std::string::npos) {
+                trait_base = trait_base.substr(0, pos);
+            }
+
+            auto it = trait_type_params_.find(trait_base);
+            if (it == trait_type_params_.end()) {
+            }
+            if (it != trait_type_params_.end()) {
+                Type trait_type = type_from_name(impl.trait_name);
+                if (!trait_type.generic_args.empty()) {
+                    std::vector<std::string> raw_params;
+                    for (const auto& p : it->second) {
+                        if (p.find(':') == std::string::npos)
+                            raw_params.push_back(p);
+                    }
+
+                    std::unordered_map<std::string, std::string> mapping;
+                    for (size_t i = 0; i < raw_params.size() && i < trait_type.generic_args.size();
+                         ++i) {
+                        mapping[raw_params[i]] = trait_type.generic_args[i].name;
+                    }
+
+                    auto all_bounds = parse_type_param_bounds(it->second);
+                    for (const auto& b : all_bounds) {
+                        if (mapping.contains(b.param_name)) {
+                            const std::string& arg_type = mapping.at(b.param_name);
+                            for (const auto& trait : b.bounds) {
+                                if (!type_implements_trait(arg_type, trait)) {
+                                    if (!has_generic_param(arg_type)) {
+                                        throw DiagnosticError(
+                                            "type '" + arg_type + "' does not implement trait '" +
+                                                trait + "' required by trait '" + trait_base + "'",
+                                            0, 0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Parse impl bounds
@@ -1068,33 +1252,6 @@ bool Resolver::resolve_block(const ast::Block& block) {
     }
 
     return always_returns;
-}
-
-// Helper to check if a type name references a generic type parameter
-static bool has_generic_param(const std::string& type_name) {
-    // Single uppercase letter is a generic param (T, U, V, etc.)
-    if (type_name.size() == 1 && std::isupper(type_name[0]))
-        return true;
-    // Reference to generic: &T, &mut T
-    if (type_name.find("&") != std::string::npos) {
-        // Check the non-reference part
-        auto pos = type_name.find_last_of("& ");
-        if (pos != std::string::npos) {
-            std::string inner = type_name.substr(pos + 1);
-            if (inner.size() == 1 && std::isupper(inner[0]))
-                return true;
-        }
-    }
-    // Generic container: Box<T>, Vec<T>, etc.
-    if (auto open = type_name.find('<'); open != std::string::npos) {
-        auto close = type_name.find('>');
-        if (close != std::string::npos) {
-            std::string inner = type_name.substr(open + 1, close - open - 1);
-            if (inner.size() == 1 && std::isupper(inner[0]))
-                return true;
-        }
-    }
-    return false;
 }
 
 bool Resolver::resolve_statement(const ast::Stmt& stmt) {
