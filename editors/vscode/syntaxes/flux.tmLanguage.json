@@ -8,6 +8,14 @@
             "include": "#comments"
         },
         {
+            "name": "storage.type.function.arrow.flux",
+            "match": "->"
+        },
+        {
+            "name": "keyword.control.match-arm.flux",
+            "match": "=>"
+        },
+        {
             "include": "#annotations"
         },
         {
@@ -281,14 +289,6 @@
         "operators": {
             "patterns": [
                 {
-                    "name": "punctuation.separator.function.return-type.flux",
-                    "match": "->"
-                },
-                {
-                    "name": "keyword.control.match-arm.flux",
-                    "match": "=>"
-                },
-                {
                     "name": "keyword.operator.comparison.flux",
                     "match": "==|!=|<=|>=|<|>"
                 },
@@ -373,49 +373,16 @@
         "punctuation": {
             "patterns": [
                 {
-                    "name": "meta.block.flux",
-                    "begin": "\\{",
-                    "beginCaptures": {
-                        "0": {
-                            "name": "punctuation.section.block.begin.bracket.curly.flux"
-                        }
-                    },
-                    "end": "\\}",
-                    "endCaptures": {
-                        "0": {
-                            "name": "punctuation.section.block.end.bracket.curly.flux"
-                        }
-                    }
+                    "name": "punctuation.brackets.curly.flux",
+                    "match": "[{}]"
                 },
                 {
-                    "name": "meta.brackets.round.flux",
-                    "begin": "\\(",
-                    "beginCaptures": {
-                        "0": {
-                            "name": "punctuation.section.parens.begin.bracket.round.flux"
-                        }
-                    },
-                    "end": "\\)",
-                    "endCaptures": {
-                        "0": {
-                            "name": "punctuation.section.parens.end.bracket.round.flux"
-                        }
-                    }
+                    "name": "punctuation.brackets.round.flux",
+                    "match": "[()]"
                 },
                 {
-                    "name": "meta.brackets.square.flux",
-                    "begin": "\\[",
-                    "beginCaptures": {
-                        "0": {
-                            "name": "punctuation.section.brackets.begin.bracket.square.flux"
-                        }
-                    },
-                    "end": "\\]",
-                    "endCaptures": {
-                        "0": {
-                            "name": "punctuation.section.brackets.end.bracket.square.flux"
-                        }
-                    }
+                    "name": "punctuation.brackets.square.flux",
+                    "match": "[\\[\\]]"
                 },
                 {
                     "name": "punctuation.comma.flux",
