@@ -35,6 +35,7 @@ add_library(flux_core
     src/parser/parser.cpp
     src/ast/ast_printer.cpp
     src/semantic/resolver.cpp
+    src/semantic/monomorphizer.cpp
 )
 
 target_include_directories(flux_core PUBLIC
@@ -81,6 +82,11 @@ add_flux_test(trait_conformance)
 add_flux_test(trait_default_methods)
 add_flux_test(trait_dispatch)
 add_flux_test(index_slice)
+add_flux_test(generic_method)
+add_flux_test(generic_method_fail)
+add_flux_test(trait_default_generic)
+add_flux_test(visibility)
+add_flux_test(orphan_rule)
 
 
 # By this what we've earned?

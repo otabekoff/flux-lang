@@ -11,7 +11,7 @@
 // Debug
 #include "ast/ast_printer.h"
 
-#include "semantic/resolver.h"
+#include "semantic/monomorphizer.h"
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -37,17 +37,30 @@ int main(int argc, char** argv) {
         flux::Parser parser(tokens);
         const flux::ast::Module module = parser.parse_module();
 
-        flux::ast::ASTPrinter printer;
-        printer.print(module);
-
         std::cout << "Parsed module: " << module.name << '\n';
 
         flux::semantic::Resolver resolver;
         resolver.resolve(module);
 
         std::cout << "Semantic analysis OK\n";
+
+        // Monomorphization
+        std::cout << "Starting monomorphization...\n";
+        flux::semantic::Monomorphizer monomorphizer(resolver);
+        flux::ast::Module monomorphized_module = monomorphizer.monomorphize(module);
+
+        std::cout << "Monomorphization OK. Specialized functions generated: "
+                  << (monomorphized_module.functions.size() - module.functions.size()) << "\n";
+
+        // Optional: Print monomorphized AST
+        // flux::ast::ASTPrinter printer;
+        // printer.print(monomorphized_module);
+
     } catch (const flux::DiagnosticError& e) {
         std::cerr << e.what() << '\n';
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "Internal error: " << e.what() << '\n';
         return 1;
     }
 

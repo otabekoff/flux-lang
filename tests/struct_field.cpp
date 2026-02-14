@@ -10,7 +10,8 @@ using namespace flux::semantic;
 void test_struct_field_access() {
     // Define struct: struct Point { x: Int32, y: Int32 }
 
-    StructDecl point_decl("Point", {}, {{"x", "Int32", ""}, {"y", "Int32", ""}});
+    StructDecl point_decl("Point", {},
+                          {{"x", "Int32", Visibility::Public}, {"y", "Int32", Visibility::Public}});
 
     // Create module and add struct
 
@@ -30,7 +31,7 @@ void test_struct_field_access() {
 
     Resolver resolver;
     resolver.resolve(mod);
-    Type t = resolver.type_of(*field_access);
+    FluxType t = resolver.type_of(*field_access);
     assert(t.kind == TypeKind::Int);
     assert(t.name == "Int32");
 }

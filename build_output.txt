@@ -1,0 +1,26 @@
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  flux_core.vcxproj -> D:\project\tutorial\flux\build\Debug\flux_core.lib
+  array_slice.vcxproj -> D:\project\tutorial\flux\build\Debug\array_slice.exe
+  associated_types.vcxproj -> D:\project\tutorial\flux\build\Debug\associated_types.exe
+  flux.vcxproj -> D:\project\tutorial\flux\build\Debug\flux.exe
+  generic_method.vcxproj -> D:\project\tutorial\flux\build\Debug\generic_method.exe
+  generic_method_fail.vcxproj -> D:\project\tutorial\flux\build\Debug\generic_method_fail.exe
+  index_slice.vcxproj -> D:\project\tutorial\flux\build\Debug\index_slice.exe
+  lambda_parse.vcxproj -> D:\project\tutorial\flux\build\Debug\lambda_parse.exe
+  monomorphization.vcxproj -> D:\project\tutorial\flux\build\Debug\monomorphization.exe
+  never_propagation.vcxproj -> D:\project\tutorial\flux\build\Debug\never_propagation.exe
+  numeric_promotion.vcxproj -> D:\project\tutorial\flux\build\Debug\numeric_promotion.exe
+  option_result.vcxproj -> D:\project\tutorial\flux\build\Debug\option_result.exe
+  orphan_rule.vcxproj -> D:\project\tutorial\flux\build\Debug\orphan_rule.exe
+  reference.vcxproj -> D:\project\tutorial\flux\build\Debug\reference.exe
+  struct_field.vcxproj -> D:\project\tutorial\flux\build\Debug\struct_field.exe
+  trait_bound.vcxproj -> D:\project\tutorial\flux\build\Debug\trait_bound.exe
+  trait_conformance.vcxproj -> D:\project\tutorial\flux\build\Debug\trait_conformance.exe
+  trait_default_generic.vcxproj -> D:\project\tutorial\flux\build\Debug\trait_default_generic.exe
+  trait_default_methods.vcxproj -> D:\project\tutorial\flux\build\Debug\trait_default_methods.exe
+  trait_dispatch.vcxproj -> D:\project\tutorial\flux\build\Debug\trait_dispatch.exe
+  tuple.vcxproj -> D:\project\tutorial\flux\build\Debug\tuple.exe
+  type_alias.vcxproj -> D:\project\tutorial\flux\build\Debug\type_alias.exe
+  visibility.vcxproj -> D:\project\tutorial\flux\build\Debug\visibility.exe
+  where_clause.vcxproj -> D:\project\tutorial\flux\build\Debug\where_clause.exe

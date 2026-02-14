@@ -15,7 +15,7 @@ void test_tuple_expr() {
     elems.push_back(std::make_unique<BoolExpr>(true));
     TupleExpr tuple(std::move(elems));
     Resolver resolver;
-    Type t = resolver.type_of(tuple);
+    FluxType t = resolver.type_of(tuple);
     assert(t.kind == TypeKind::Tuple);
     assert(t.name == "(Int32,Float64,Bool)");
 }

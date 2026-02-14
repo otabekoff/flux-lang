@@ -100,8 +100,16 @@ const Token& Parser::expect(TokenKind kind, const char* message) {
 }
 
 bool Parser::check_visibility() {
-    return peek().kind == TokenKind::Keyword &&
-           (peek().lexeme == "pub" || peek().lexeme == "public" || peek().lexeme == "private");
+    TokenKind kind = peek().kind;
+    return kind == TokenKind::Pub || kind == TokenKind::Public || kind == TokenKind::Private;
+}
+
+ast::Visibility Parser::parse_visibility() {
+    if (match(TokenKind::Pub) || match(TokenKind::Public))
+        return ast::Visibility::Public;
+    if (match(TokenKind::Private))
+        return ast::Visibility::Private;
+    return ast::Visibility::None;
 }
 
 /* =======================
@@ -511,37 +519,31 @@ ast::Module Parser::parse_module() {
             advance();
         }
 
-        bool is_public = false;
-        if (check_visibility()) {
-            if (peek().lexeme == "pub" || peek().lexeme == "public") {
-                is_public = true;
-            }
-            advance();
-        }
+        ast::Visibility visibility = parse_visibility();
 
         if (peek().kind == TokenKind::Keyword) {
             if (peek().lexeme == "async") {
                 advance();
                 if (peek().kind == TokenKind::Keyword && peek().lexeme == "func") {
-                    module.functions.push_back(parse_function(is_public, true));
+                    module.functions.push_back(parse_function(visibility, true));
                     continue;
                 }
                 throw DiagnosticError("expected 'func' after 'async'", peek().line, peek().column);
             }
             if (peek().lexeme == "func") {
-                module.functions.push_back(parse_function(is_public));
+                module.functions.push_back(parse_function(visibility));
                 continue;
             }
             if (peek().lexeme == "struct") {
-                module.structs.push_back(parse_struct_declaration(is_public));
+                module.structs.push_back(parse_struct_declaration(visibility));
                 continue;
             }
             if (peek().lexeme == "class") {
-                module.classes.push_back(parse_class_declaration(is_public));
+                module.classes.push_back(parse_class_declaration(visibility));
                 continue;
             }
             if (peek().lexeme == "enum") {
-                module.enums.push_back(parse_enum_declaration(is_public));
+                module.enums.push_back(parse_enum_declaration(visibility));
                 continue;
             }
             if (peek().lexeme == "impl") {
@@ -549,11 +551,11 @@ ast::Module Parser::parse_module() {
                 continue;
             }
             if (peek().lexeme == "trait") {
-                module.traits.push_back(parse_trait_declaration(is_public));
+                module.traits.push_back(parse_trait_declaration(visibility));
                 continue;
             }
             if (peek().lexeme == "type") {
-                module.type_aliases.push_back(parse_type_alias(is_public));
+                module.type_aliases.push_back(parse_type_alias(visibility));
                 continue;
             }
         }
@@ -587,11 +589,11 @@ ast::Import Parser::parse_import() {
    Function
    ======================= */
 
-ast::FunctionDecl Parser::parse_function(bool is_public, bool is_async) {
+ast::FunctionDecl Parser::parse_function(ast::Visibility visibility, bool is_async) {
     expect(TokenKind::Keyword, "expected 'func'");
 
     ast::FunctionDecl fn;
-    fn.is_public = is_public;
+    fn.visibility = visibility;
     fn.is_async = is_async;
     fn.name = expect(TokenKind::Identifier, "expected function name").lexeme;
     fn.type_params = parse_type_params();
@@ -933,7 +935,7 @@ ast::PatternPtr Parser::parse_pattern() {
     throw DiagnosticError("expected pattern", tok.line, tok.column);
 }
 
-ast::StructDecl Parser::parse_struct_declaration(bool is_public) {
+ast::StructDecl Parser::parse_struct_declaration(ast::Visibility visibility) {
     expect(TokenKind::Keyword, "expected 'struct'");
     const std::string name = expect(TokenKind::Identifier, "expected struct name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
@@ -942,26 +944,25 @@ ast::StructDecl Parser::parse_struct_declaration(bool is_public) {
 
     std::vector<ast::Field> fields;
     while (!match(TokenKind::RBrace)) {
-        std::string visibility;
+        ast::Visibility field_visibility = ast::Visibility::None;
         if (check_visibility()) {
-            visibility = peek().lexeme;
-            advance();
+            field_visibility = parse_visibility();
         }
 
         const std::string field_name = expect(TokenKind::Identifier, "expected field name").lexeme;
         expect(TokenKind::Colon, "expected ':'");
         std::string field_type = parse_type();
-        fields.push_back({field_name, std::move(field_type), std::move(visibility)});
+        fields.push_back({field_name, std::move(field_type), field_visibility});
         match(TokenKind::Comma);
     }
 
     auto decl = ast::StructDecl{name, std::move(type_params), std::move(fields)};
-    decl.is_public = is_public;
+    decl.visibility = visibility;
     decl.where_clause = std::move(where_clause);
     return decl;
 }
 
-ast::ClassDecl Parser::parse_class_declaration(bool is_public) {
+ast::ClassDecl Parser::parse_class_declaration(ast::Visibility visibility) {
     expect(TokenKind::Keyword, "expected 'class'");
     const std::string name = expect(TokenKind::Identifier, "expected class name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
@@ -970,26 +971,25 @@ ast::ClassDecl Parser::parse_class_declaration(bool is_public) {
 
     std::vector<ast::Field> fields;
     while (!match(TokenKind::RBrace)) {
-        std::string visibility;
+        ast::Visibility field_visibility = ast::Visibility::None;
         if (check_visibility()) {
-            visibility = peek().lexeme;
-            advance();
+            field_visibility = parse_visibility();
         }
 
         const std::string field_name = expect(TokenKind::Identifier, "expected field name").lexeme;
         expect(TokenKind::Colon, "expected ':'");
         std::string field_type = parse_type();
-        fields.push_back({field_name, std::move(field_type), std::move(visibility)});
+        fields.push_back({field_name, std::move(field_type), field_visibility});
         match(TokenKind::Comma);
     }
 
     auto decl = ast::ClassDecl{name, std::move(type_params), std::move(fields)};
-    decl.is_public = is_public;
+    decl.visibility = visibility;
     decl.where_clause = std::move(where_clause);
     return decl;
 }
 
-ast::EnumDecl Parser::parse_enum_declaration(bool is_public) {
+ast::EnumDecl Parser::parse_enum_declaration(ast::Visibility visibility) {
     expect(TokenKind::Keyword, "expected 'enum'");
     const std::string name = expect(TokenKind::Identifier, "expected enum name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
@@ -1014,7 +1014,7 @@ ast::EnumDecl Parser::parse_enum_declaration(bool is_public) {
     }
 
     auto decl = ast::EnumDecl{name, std::move(type_params), std::move(variants)};
-    decl.is_public = is_public;
+    decl.visibility = visibility;
     decl.where_clause = std::move(where_clause);
     return decl;
 }
@@ -1044,11 +1044,9 @@ ast::ImplBlock Parser::parse_impl_block() {
     std::vector<ast::FunctionDecl> methods;
     std::vector<ast::AssociatedType> associated_types;
     while (!match(TokenKind::RBrace)) {
-        bool is_pub = false;
+        ast::Visibility method_visibility = ast::Visibility::None;
         if (check_visibility()) {
-            if (peek().lexeme == "pub" || peek().lexeme == "public")
-                is_pub = true;
-            advance();
+            method_visibility = parse_visibility();
         }
 
         if (peek().kind == TokenKind::Keyword && peek().lexeme == "type") {
@@ -1067,7 +1065,7 @@ ast::ImplBlock Parser::parse_impl_block() {
             is_async_method = true;
         }
 
-        methods.push_back(parse_function(is_pub, is_async_method));
+        methods.push_back(parse_function(method_visibility, is_async_method));
     }
 
     auto impl = ast::ImplBlock{std::move(type_params), target_name, std::move(methods)};
@@ -1077,7 +1075,7 @@ ast::ImplBlock Parser::parse_impl_block() {
     return impl;
 }
 
-ast::TraitDecl Parser::parse_trait_declaration(bool is_public) {
+ast::TraitDecl Parser::parse_trait_declaration(ast::Visibility visibility) {
     expect(TokenKind::Keyword, "expected 'trait'");
     const std::string name = expect(TokenKind::Identifier, "expected trait name").lexeme;
     std::vector<std::string> type_params = parse_type_params();
@@ -1104,13 +1102,13 @@ ast::TraitDecl Parser::parse_trait_declaration(bool is_public) {
     }
 
     auto decl = ast::TraitDecl{name, std::move(type_params), std::move(methods)};
-    decl.is_public = is_public;
+    decl.visibility = visibility;
     decl.associated_types = std::move(associated_types);
     decl.where_clause = std::move(where_clause);
     return decl;
 }
 
-ast::TypeAlias Parser::parse_type_alias(bool is_public) {
+ast::TypeAlias Parser::parse_type_alias(ast::Visibility visibility) {
     expect(TokenKind::Keyword, "expected 'type'");
     const std::string name = expect(TokenKind::Identifier, "expected type alias name").lexeme;
     expect(TokenKind::Assign, "expected '='");
@@ -1118,7 +1116,7 @@ ast::TypeAlias Parser::parse_type_alias(bool is_public) {
     expect(TokenKind::Semicolon, "expected ';' after type alias");
 
     auto alias = ast::TypeAlias{name, std::move(target)};
-    alias.is_public = is_public;
+    alias.visibility = visibility;
     return alias;
 }
 

@@ -39,14 +39,15 @@ class Parser {
        ======================= */
     ast::Import parse_import();
 
-    ast::FunctionDecl parse_function(bool is_public = false, bool is_async = false);
+    ast::FunctionDecl parse_function(ast::Visibility visibility = ast::Visibility::None,
+                                     bool is_async = false);
 
-    ast::StructDecl parse_struct_declaration(bool is_public = false);
-    ast::ClassDecl parse_class_declaration(bool is_public = false);
-    ast::EnumDecl parse_enum_declaration(bool is_public = false);
+    ast::StructDecl parse_struct_declaration(ast::Visibility visibility = ast::Visibility::None);
+    ast::ClassDecl parse_class_declaration(ast::Visibility visibility = ast::Visibility::None);
+    ast::EnumDecl parse_enum_declaration(ast::Visibility visibility = ast::Visibility::None);
     ast::ImplBlock parse_impl_block();
-    ast::TraitDecl parse_trait_declaration(bool is_public = false);
-    ast::TypeAlias parse_type_alias(bool is_public = false);
+    ast::TraitDecl parse_trait_declaration(ast::Visibility visibility = ast::Visibility::None);
+    ast::TypeAlias parse_type_alias(ast::Visibility visibility = ast::Visibility::None);
 
     std::vector<std::string> parse_type_params();
     std::string parse_type();
@@ -68,6 +69,7 @@ class Parser {
        Visibility helpers
        ======================= */
     bool check_visibility();
+    ast::Visibility parse_visibility();
 
   private:
     std::vector<Token> tokens_;

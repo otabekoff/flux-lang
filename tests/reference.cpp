@@ -16,7 +16,7 @@ void test_immutable_reference() {
     std::cout << "after UnaryExpr\n" << std::flush;
     Resolver resolver;
     std::cout << "after Resolver\n" << std::flush;
-    Type t = resolver.type_of(ref);
+    FluxType t = resolver.type_of(ref);
     std::cout << "after type_of, kind=" << static_cast<int>(t.kind)
               << ", is_mut_ref=" << t.is_mut_ref << ", name=" << t.name << "\n"
               << std::flush;
@@ -38,7 +38,7 @@ void test_mutable_reference() {
     std::cout << "after UnaryExpr\n" << std::flush;
     Resolver resolver;
     std::cout << "after Resolver\n" << std::flush;
-    Type t = resolver.type_of(ref);
+    FluxType t = resolver.type_of(ref);
     std::cout << "after type_of, kind=" << static_cast<int>(t.kind)
               << ", is_mut_ref=" << t.is_mut_ref << ", name=" << t.name << "\n"
               << std::flush;

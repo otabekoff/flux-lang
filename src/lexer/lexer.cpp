@@ -211,8 +211,15 @@ std::vector<Token> Lexer::tokenize() {
                 ident.push_back(advance());
             }
 
-            const TokenKind kind =
-                keywords.contains(ident) ? TokenKind::Keyword : TokenKind::Identifier;
+            TokenKind kind = TokenKind::Identifier;
+            if (ident == "pub")
+                kind = TokenKind::Pub;
+            else if (ident == "public")
+                kind = TokenKind::Public;
+            else if (ident == "private")
+                kind = TokenKind::Private;
+            else if (keywords.contains(ident))
+                kind = TokenKind::Keyword;
 
             tokens.push_back({kind, ident, line_, start_col});
             continue;

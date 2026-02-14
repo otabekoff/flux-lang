@@ -7,7 +7,7 @@ using namespace flux::semantic;
 
 void test_option_type() {
     Resolver resolver;
-    Type t = resolver.type_from_name("Option<Int>");
+    FluxType t = resolver.type_from_name("Option<Int>");
     assert(t.kind == TypeKind::Option);
     assert(t.generic_args.size() == 1);
     assert(t.generic_args[0].kind == TypeKind::Int);
@@ -16,7 +16,7 @@ void test_option_type() {
 
 void test_result_type() {
     Resolver resolver;
-    Type t = resolver.type_from_name("Result<Int, String>");
+    FluxType t = resolver.type_from_name("Result<Int, String>");
     assert(t.kind == TypeKind::Result);
     assert(t.generic_args.size() == 2);
     assert(t.generic_args[0].kind == TypeKind::Int);

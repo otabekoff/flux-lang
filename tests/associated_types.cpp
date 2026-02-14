@@ -58,7 +58,7 @@ void test_resolution_associated_types() {
 
         func get_element<C: Container>(c: C) -> C::Element {
             // Placeholder: resolution of C::Element inside generic func
-            return 0; // Type checking of return is not exhaustive here yet
+            return 0; // FluxType checking of return is not exhaustive here yet
         }
     )";
 

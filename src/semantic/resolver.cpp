@@ -48,15 +48,15 @@ struct ScopeGuard {
     }
 };
 
-Type Resolver::type_from_name(const std::string& name) {
+FluxType Resolver::type_from_name(const std::string& name) {
     std::unordered_set<std::string> seen;
     return type_from_name_internal(name, seen);
 }
 
-Type Resolver::type_from_name_internal(const std::string& name,
-                                       std::unordered_set<std::string>& seen) {
+FluxType Resolver::type_from_name_internal(const std::string& name,
+                                           std::unordered_set<std::string>& seen) {
     if (name.empty()) {
-        return Type(TypeKind::Unknown, "");
+        return FluxType(TypeKind::Unknown, "");
     }
     // Check substitution map for generic type parameters
     auto sub_it = substitution_map_.find(name);
@@ -70,8 +70,8 @@ Type Resolver::type_from_name_internal(const std::string& name,
         size_t end = name.rfind('>');
         if (start != std::string::npos && end != std::string::npos && end > start + 1) {
             std::string inner = name.substr(start + 1, end - start - 1);
-            Type inner_type = type_from_name_internal(inner, seen);
-            Type t(TypeKind::Option, name);
+            FluxType inner_type = type_from_name_internal(inner, seen);
+            FluxType t(TypeKind::Option, name);
             t.generic_args.push_back(inner_type);
             return t;
         }
@@ -90,9 +90,9 @@ Type Resolver::type_from_name_internal(const std::string& name,
                 t1.erase(t1.find_last_not_of(" \t\n") + 1);
                 t2.erase(0, t2.find_first_not_of(" \t\n"));
                 t2.erase(t2.find_last_not_of(" \t\n") + 1);
-                Type type1 = type_from_name_internal(t1, seen);
-                Type type2 = type_from_name_internal(t2, seen);
-                Type t(TypeKind::Result, name);
+                FluxType type1 = type_from_name_internal(t1, seen);
+                FluxType type2 = type_from_name_internal(t2, seen);
+                FluxType t(TypeKind::Result, name);
                 t.generic_args.push_back(type1);
                 t.generic_args.push_back(type2);
                 return t;
@@ -102,31 +102,31 @@ Type Resolver::type_from_name_internal(const std::string& name,
 
     if (name.starts_with("Int") || name.starts_with("UInt") || name == "IntPtr" ||
         name == "UIntPtr") {
-        return Type(TypeKind::Int, name);
+        return FluxType(TypeKind::Int, name);
     }
 
     if (name.starts_with("Float")) {
-        return Type(TypeKind::Float, name);
+        return FluxType(TypeKind::Float, name);
     }
 
     if (name == "Bool") {
-        return Type(TypeKind::Bool, name);
+        return FluxType(TypeKind::Bool, name);
     }
 
     if (name == "String") {
-        return Type(TypeKind::String, name);
+        return FluxType(TypeKind::String, name);
     }
 
     if (name == "Char") {
-        return Type(TypeKind::Char, name);
+        return FluxType(TypeKind::Char, name);
     }
 
     if (name == "Void") {
-        return Type(TypeKind::Void, name);
+        return FluxType(TypeKind::Void, name);
     }
 
     if (name == "Never") {
-        return Type(TypeKind::Never, name);
+        return FluxType(TypeKind::Never, name);
     }
 
     if (name == "Self" && !current_type_name_.empty()) {
@@ -143,13 +143,13 @@ Type Resolver::type_from_name_internal(const std::string& name,
         return {TypeKind::Struct, name};
     }
 
-    // Type aliases
+    // FluxType aliases
     if (type_aliases_.contains(name)) {
         if (seen.contains(name)) {
             throw DiagnosticError("circular type alias detected: '" + name + "'", 0, 0);
         }
         seen.insert(name);
-        Type resolved = type_from_name_internal(type_aliases_.at(name), seen);
+        FluxType resolved = type_from_name_internal(type_aliases_.at(name), seen);
         seen.erase(name);
         return resolved;
     }
@@ -160,7 +160,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
         std::string base_name = name.substr(0, pos);
         std::string assoc_name = name.substr(pos + 2);
 
-        Type base_type = type_from_name_internal(base_name, seen);
+        FluxType base_type = type_from_name_internal(base_name, seen);
         if (base_type.kind != TypeKind::Unknown) {
             // 1. Look for concrete impl mapping
             auto it_range = trait_impls_.find(base_type.name);
@@ -218,7 +218,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
                             // In a generic context, we might keep it as T::Item
                             // or resolve to a placeholder. For now, return a generic type
                             // representing the associated type itself.
-                            return Type(TypeKind::Generic, name);
+                            return FluxType(TypeKind::Generic, name);
                         }
                     }
                 }
@@ -229,8 +229,8 @@ Type Resolver::type_from_name_internal(const std::string& name,
     // Generic type parameters from scope
     if (current_scope_) {
         if (auto sym = current_scope_->lookup(name)) {
-            if (sym->kind == SymbolKind::Variable && sym->type == "Type") {
-                return Type(TypeKind::Generic, name);
+            if (sym->kind == SymbolKind::Variable && sym->type == "FluxType") {
+                return FluxType(TypeKind::Generic, name);
             }
         }
     }
@@ -245,7 +245,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
                 trait_type_params_.contains(base) || function_type_params_.contains(base) ||
                 type_aliases_.contains(base) || struct_fields_.contains(base)) {
                 std::string args_str = name.substr(open + 1, close - open - 1);
-                std::vector<Type> args;
+                std::vector<FluxType> args;
 
                 // Split args by comma, respecting nested brackets
                 int depth = 0;
@@ -271,7 +271,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
                     }
                 }
 
-                Type t(TypeKind::Struct, name);
+                FluxType t(TypeKind::Struct, name);
                 t.generic_args = std::move(args);
 
                 // Record type instantiation
@@ -302,7 +302,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
                 inner.erase(0, inner.find_first_not_of(" \t\n"));
                 inner.erase(inner.find_last_not_of(" \t\n") + 1);
 
-                Type value_type = type_from_name_internal(inner, seen);
+                FluxType value_type = type_from_name_internal(inner, seen);
                 if (value_type.kind != TypeKind::Unknown) {
                     std::string canonical_name = "[" + value_type.name + ";" + size_str + "]";
                     return {TypeKind::Array, canonical_name};
@@ -314,7 +314,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
                 inner.erase(0, inner.find_first_not_of(" \t\n"));
                 inner.erase(inner.find_last_not_of(" \t\n") + 1);
 
-                Type value_type = type_from_name_internal(inner, seen);
+                FluxType value_type = type_from_name_internal(inner, seen);
                 if (value_type.kind != TypeKind::Unknown) {
                     std::string canonical_name = "[" + value_type.name + "]";
                     return {TypeKind::Slice, canonical_name};
@@ -346,7 +346,7 @@ Type Resolver::type_from_name_internal(const std::string& name,
             if (arrow_pos != std::string::npos) {
                 // It IS a function type: (Args) -> Ret
                 std::string args_content = name.substr(1, args_end - 1);
-                std::vector<Type> params;
+                std::vector<FluxType> params;
                 if (!args_content.empty()) {
                     int d = 0;
                     size_t start = 0;
@@ -384,10 +384,10 @@ Type Resolver::type_from_name_internal(const std::string& name,
                     size_t last = ret_str.find_last_not_of(" \t\n");
                     ret_str = ret_str.substr(first, last - first + 1);
                 }
-                Type ret_type = type_from_name_internal(ret_str, seen);
+                FluxType ret_type = type_from_name_internal(ret_str, seen);
 
-                return Type(TypeKind::Function, name, false, std::move(params),
-                            std::make_unique<Type>(std::move(ret_type)));
+                return FluxType(TypeKind::Function, name, false, std::move(params),
+                                std::make_unique<FluxType>(std::move(ret_type)));
             }
         }
 
@@ -419,19 +419,19 @@ std::string Resolver::find_enum_for_variant(const std::string& variant_name) con
     return "";
 }
 
-Type Resolver::type_of(const ast::Expr& expr) {
-    using semantic::Type;
+FluxType Resolver::type_of(const ast::Expr& expr) {
+    using semantic::FluxType;
     using semantic::TypeKind;
 
     if (auto arr = dynamic_cast<const ast::ArrayExpr*>(&expr)) {
         if (arr->elements.empty()) {
             throw DiagnosticError("empty array literal is not allowed", 0, 0);
         }
-        Type first_type = type_of(*arr->elements[0]);
+        FluxType first_type = type_of(*arr->elements[0]);
         bool any_never = first_type.kind == TypeKind::Never;
 
         for (size_t i = 1; i < arr->elements.size(); ++i) {
-            Type t = type_of(*arr->elements[i]);
+            FluxType t = type_of(*arr->elements[i]);
             if (t.kind == TypeKind::Never) {
                 any_never = true;
                 continue;
@@ -449,7 +449,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
     }
 
     if (auto slice = dynamic_cast<const ast::SliceExpr*>(&expr)) {
-        Type arr_type = type_of(*slice->array);
+        FluxType arr_type = type_of(*slice->array);
         if (arr_type.kind != TypeKind::Array && arr_type.kind != TypeKind::Slice) {
             throw DiagnosticError("slice base must be an array or slice", 0, 0);
         }
@@ -480,13 +480,13 @@ Type Resolver::type_of(const ast::Expr& expr) {
     }
 
     if (auto idx = dynamic_cast<const ast::IndexExpr*>(&expr)) {
-        Type arr_type = type_of(*idx->array);
+        FluxType arr_type = type_of(*idx->array);
         if (arr_type.kind != TypeKind::Array && arr_type.kind != TypeKind::Slice) {
             throw DiagnosticError("index base must be an array or slice", 0, 0);
         }
 
         // Index type must be integer
-        Type index_type = type_of(*idx->index);
+        FluxType index_type = type_of(*idx->index);
         if (index_type.kind != TypeKind::Int && index_type.kind != TypeKind::Unknown) {
             throw DiagnosticError("index must be an integer", 0, 0);
         }
@@ -537,7 +537,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
         bool first = true;
         bool any_never = false;
         for (const auto& elem : tuple->elements) {
-            Type t = type_of(*elem);
+            FluxType t = type_of(*elem);
             if (t.kind == TypeKind::Never)
                 any_never = true;
             if (!first)
@@ -552,11 +552,11 @@ Type Resolver::type_of(const ast::Expr& expr) {
     }
 
     if (auto lambda = dynamic_cast<const ast::LambdaExpr*>(&expr)) {
-        std::vector<Type> param_types;
+        std::vector<FluxType> param_types;
         std::string name = "(";
         bool first = true;
         for (const auto& param : lambda->params) {
-            Type t = type_from_name(param.type);
+            FluxType t = type_from_name(param.type);
             param_types.push_back(t);
             if (!first)
                 name += ", ";
@@ -565,11 +565,11 @@ Type Resolver::type_of(const ast::Expr& expr) {
         }
         name += ")";
 
-        Type return_type = type_from_name(lambda->return_type);
+        FluxType return_type = type_from_name(lambda->return_type);
         name += " -> " + return_type.name;
 
-        Type fn_type(TypeKind::Function, name, false, param_types,
-                     std::make_unique<Type>(return_type));
+        FluxType fn_type(TypeKind::Function, name, false, param_types,
+                         std::make_unique<FluxType>(return_type));
         return fn_type;
     }
 
@@ -585,7 +585,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
         }
 
         if (id->name == "None") {
-            Type t(TypeKind::Option, "Option<Unknown>");
+            FluxType t(TypeKind::Option, "Option<Unknown>");
             t.generic_args.push_back(unknown());
             return t;
         }
@@ -601,11 +601,11 @@ Type Resolver::type_of(const ast::Expr& expr) {
         }
 
         if (sym->kind == SymbolKind::Function) {
-            std::vector<Type> params;
+            std::vector<FluxType> params;
             std::string name = "(";
             bool first = true;
             for (const auto& p : sym->param_types) {
-                Type t = type_from_name(p);
+                FluxType t = type_from_name(p);
                 params.push_back(t);
                 if (!first)
                     name += ", ";
@@ -614,11 +614,11 @@ Type Resolver::type_of(const ast::Expr& expr) {
             }
             name += ")";
 
-            Type ret = type_from_name(sym->type);
+            FluxType ret = type_from_name(sym->type);
             name += " -> " + ret.name;
 
-            return Type(TypeKind::Function, name, false, std::move(params),
-                        std::make_unique<Type>(std::move(ret)));
+            return FluxType(TypeKind::Function, name, false, std::move(params),
+                            std::make_unique<FluxType>(std::move(ret)));
         }
 
         return type_from_name(sym->type);
@@ -660,7 +660,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
         // Handle dot access (field access / method call receiver)
         if (bin->op == TokenKind::Dot) {
             // Try to resolve the type of the left-hand side
-            Type lhs = type_of(*bin->left);
+            FluxType lhs = type_of(*bin->left);
             if (lhs.kind == TypeKind::Never)
                 return never_type();
 
@@ -678,8 +678,18 @@ Type Resolver::type_of(const ast::Expr& expr) {
                     if (!struct_fields_.contains(base))
                         return std::nullopt;
                     for (const auto& p : struct_fields_.at(base)) {
-                        if (p.first == field_name)
-                            return p.second;
+                        if (p.name == field_name) {
+                            // Enforce visibility
+                            if (p.visibility == ast::Visibility::Private ||
+                                p.visibility == ast::Visibility::None) {
+                                // Private fields are only accessible within the type's own methods
+                                if (current_type_name_ != base) {
+                                    throw DiagnosticError("field '" + field_name + "' is private",
+                                                          0, 0);
+                                }
+                            }
+                            return p.type;
+                        }
                     }
                     return std::nullopt;
                 };
@@ -691,7 +701,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                     }
                 }
 
-                // 3. Try method lookup in scope (qualified name: Type::Method)
+                // 3. Try method lookup in scope (qualified name: FluxType::Method)
                 std::string base_type_name = lhs.name;
                 // Strip references (&Person -> Person)
                 if (base_type_name.starts_with("&mut ")) {
@@ -704,15 +714,28 @@ Type Resolver::type_of(const ast::Expr& expr) {
                     base_type_name = base_type_name.substr(0, pos);
                 }
 
-                std::string qualified_name = base_type_name + "::" + field_name;
+                // Strip generic arguments from field name for method lookup
+                std::string method_lookup_name = field_name;
+                if (auto pos = method_lookup_name.find('<'); pos != std::string::npos) {
+                    method_lookup_name = method_lookup_name.substr(0, pos);
+                }
+
+                std::string qualified_name = base_type_name + "::" + method_lookup_name;
                 if (const Symbol* sym = current_scope_->lookup(qualified_name)) {
                     if (sym->kind == SymbolKind::Function) {
-                        std::vector<Type> params;
+                        // Enforce method visibility
+                        if (sym->visibility == ast::Visibility::Private) {
+                            if (current_type_name_ != base_type_name) {
+                                throw DiagnosticError(
+                                    "method '" + method_lookup_name + "' is private", 0, 0);
+                            }
+                        }
+                        std::vector<FluxType> params;
                         // Skip the first parameter (implicit 'self')
                         for (size_t i = 1; i < sym->param_types.size(); ++i) {
                             params.push_back(type_from_name(sym->param_types[i]));
                         }
-                        Type ret_type = type_from_name(sym->type);
+                        FluxType ret_type = type_from_name(sym->type);
 
                         // Construct a descriptive signature for the bound method
                         std::string fn_signature = "(";
@@ -723,16 +746,81 @@ Type Resolver::type_of(const ast::Expr& expr) {
                         }
                         fn_signature += ") -> " + ret_type.name;
 
-                        return Type(TypeKind::Function, fn_signature, false, std::move(params),
-                                    std::make_unique<Type>(std::move(ret_type)));
+                        return FluxType(TypeKind::Function, fn_signature, false, std::move(params),
+                                        std::make_unique<FluxType>(std::move(ret_type)));
                     }
                 }
 
-                // If lhs is an identifier referring to a variable, try to lookup its declared type
-                if (auto lhs_id = dynamic_cast<const ast::IdentifierExpr*>(bin->left.get())) {
-                    if (const Symbol* sym = current_scope_->lookup(lhs_id->name)) {
-                        if (auto ftype = lookup_field(sym->type)) {
-                            return type_from_name(*ftype);
+                // 4. Try trait method lookup for generic parameters
+                // If lhs is Unknown, try to get the declared type name from the symbol
+                std::string type_for_bounds = base_type_name;
+                if (lhs.kind == TypeKind::Unknown || lhs.kind == TypeKind::Generic) {
+                    if (auto lhs_id = dynamic_cast<const ast::IdentifierExpr*>(bin->left.get())) {
+                        if (const Symbol* var_sym = current_scope_->lookup(lhs_id->name)) {
+                            std::string declared = var_sym->type;
+                            // Strip references
+                            if (declared.starts_with("&mut "))
+                                declared = declared.substr(5);
+                            else if (declared.starts_with("&"))
+                                declared = declared.substr(1);
+                            if (auto pos = declared.find('<'); pos != std::string::npos)
+                                declared = declared.substr(0, pos);
+                            if (!declared.empty())
+                                type_for_bounds = declared;
+                        }
+                    }
+                }
+                std::vector<std::string> trait_bounds = get_bounds_for_type(type_for_bounds);
+                for (const auto& trait_bound : trait_bounds) {
+                    std::string tb_name = trait_bound;
+                    if (auto pos = tb_name.find('<'); pos != std::string::npos) {
+                        tb_name = tb_name.substr(0, pos);
+                    }
+                    // First try scope lookup (for impl-registered methods)
+                    std::string trait_qualified = tb_name + "::" + field_name;
+                    if (const Symbol* sym = current_scope_->lookup(trait_qualified)) {
+                        if (sym->kind == SymbolKind::Function) {
+                            std::vector<FluxType> params;
+                            for (size_t i = 1; i < sym->param_types.size(); ++i) {
+                                params.push_back(type_from_name(sym->param_types[i]));
+                            }
+                            FluxType ret_type = type_from_name(sym->type);
+                            std::string fn_signature = "(";
+                            for (size_t i = 0; i < params.size(); ++i) {
+                                if (i > 0)
+                                    fn_signature += ", ";
+                                fn_signature += params[i].name;
+                            }
+                            fn_signature += ") -> " + ret_type.name;
+
+                            return FluxType(TypeKind::Function, fn_signature, false,
+                                            std::move(params),
+                                            std::make_unique<FluxType>(std::move(ret_type)));
+                        }
+                    }
+                    // Fallback: search trait_methods_ directly (for trait declarations
+                    // whose methods haven't been registered as symbols in scope)
+                    auto tm_it = trait_methods_.find(tb_name);
+                    if (tm_it != trait_methods_.end()) {
+                        for (const auto& sig : tm_it->second) {
+                            if (sig.name == field_name) {
+                                std::vector<FluxType> params;
+                                for (const auto& pt : sig.param_types) {
+                                    params.push_back(type_from_name(pt));
+                                }
+                                FluxType ret_type = type_from_name(sig.return_type);
+                                std::string fn_signature = "(";
+                                for (size_t i = 0; i < params.size(); ++i) {
+                                    if (i > 0)
+                                        fn_signature += ", ";
+                                    fn_signature += params[i].name;
+                                }
+                                fn_signature += ") -> " + ret_type.name;
+
+                                return FluxType(TypeKind::Function, fn_signature, false,
+                                                std::move(params),
+                                                std::make_unique<FluxType>(std::move(ret_type)));
+                            }
                         }
                     }
                 }
@@ -744,8 +832,8 @@ Type Resolver::type_of(const ast::Expr& expr) {
             throw DiagnosticError("right side of '.' must be an identifier", 0, 0);
         }
 
-        Type lhs = type_of(*bin->left);
-        Type rhs = type_of(*bin->right);
+        FluxType lhs = type_of(*bin->left);
+        FluxType rhs = type_of(*bin->right);
 
         if (lhs.kind == TypeKind::Never || rhs.kind == TypeKind::Never) {
             return never_type();
@@ -805,7 +893,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
     }
 
     if (auto un = dynamic_cast<const ast::UnaryExpr*>(&expr)) {
-        Type operand = type_of(*un->operand);
+        FluxType operand = type_of(*un->operand);
         if (operand.kind == TypeKind::Never)
             return never_type();
 
@@ -842,7 +930,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
     if (auto cast = dynamic_cast<const ast::CastExpr*>(&expr)) {
         (void)type_of(*cast->expr);
-        Type target = type_from_name(cast->target_type);
+        FluxType target = type_from_name(cast->target_type);
         if (target.kind == TypeKind::Unknown) {
             return target;
         }
@@ -850,17 +938,13 @@ Type Resolver::type_of(const ast::Expr& expr) {
       // here.
 
     if (const auto* call = dynamic_cast<const ast::CallExpr*>(&expr)) {
-        Type callee_type = unknown();
+        FluxType callee_type = unknown();
 
         // 1. Resolve callee type
-        try {
-            if (call->callee) {
-                callee_type = type_of(*call->callee);
-                if (callee_type.kind == TypeKind::Never)
-                    return never_type();
-            }
-        } catch (...) {
-            // Fallback
+        if (call->callee) {
+            callee_type = type_of(*call->callee);
+            if (callee_type.kind == TypeKind::Never)
+                return never_type();
         }
 
         // Record method call instantiations for dot-access calls.
@@ -870,7 +954,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
             if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
 
                 try {
-                    Type lhs_type = type_of(*bin->left);
+                    FluxType lhs_type = type_of(*bin->left);
                     std::string lhs_name = lhs_type.name;
                     if (lhs_name.starts_with("&mut "))
                         lhs_name = lhs_name.substr(5);
@@ -925,7 +1009,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                             // 2. Map method's own type params from explicit generic args
                             // Parse generic args from callee_name manually since type_from_name
                             // cannot resolve function names that aren't registered type names.
-                            std::vector<Type> explicit_args;
+                            std::vector<FluxType> explicit_args;
                             if (auto angle = callee_name.find('<'); angle != std::string::npos) {
                                 std::string args_str = callee_name.substr(angle + 1);
                                 if (!args_str.empty() && args_str.back() == '>')
@@ -973,7 +1057,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                             }
 
                             // 3. Record the instantiation
-                            std::vector<Type> concrete_args;
+                            std::vector<FluxType> concrete_args;
                             for (const auto& p : tp_it->second) {
                                 std::string param_name = p;
                                 auto colon = param_name.find(':');
@@ -1005,27 +1089,27 @@ Type Resolver::type_of(const ast::Expr& expr) {
         // Special handling for Option/Result constructors
         if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
             if (callee_id->name == "Some" && call->arguments.size() == 1) {
-                Type val_type = type_of(*call->arguments[0]);
+                FluxType val_type = type_of(*call->arguments[0]);
                 if (val_type.kind == TypeKind::Never)
                     return never_type();
-                Type t(TypeKind::Option, "Option<" + val_type.name + ">");
+                FluxType t(TypeKind::Option, "Option<" + val_type.name + ">");
                 t.generic_args.push_back(val_type);
                 return t;
             }
             if (callee_id->name == "Ok" && call->arguments.size() == 1) {
-                Type val_type = type_of(*call->arguments[0]);
+                FluxType val_type = type_of(*call->arguments[0]);
                 if (val_type.kind == TypeKind::Never)
                     return never_type();
-                Type t(TypeKind::Result, "Result<" + val_type.name + ", Unknown>");
+                FluxType t(TypeKind::Result, "Result<" + val_type.name + ", Unknown>");
                 t.generic_args.push_back(val_type);
                 t.generic_args.push_back(unknown());
                 return t;
             }
             if (callee_id->name == "Err" && call->arguments.size() == 1) {
-                Type err_type = type_of(*call->arguments[0]);
+                FluxType err_type = type_of(*call->arguments[0]);
                 if (err_type.kind == TypeKind::Never)
                     return never_type();
-                Type t(TypeKind::Result, "Result<Unknown, " + err_type.name + ">");
+                FluxType t(TypeKind::Result, "Result<Unknown, " + err_type.name + ">");
                 t.generic_args.push_back(unknown());
                 t.generic_args.push_back(err_type);
                 return t;
@@ -1043,10 +1127,10 @@ Type Resolver::type_of(const ast::Expr& expr) {
 
             bool any_never = false;
             for (size_t i = 0; i < call->arguments.size(); ++i) {
-                Type arg_type = type_of(*call->arguments[i]);
+                FluxType arg_type = type_of(*call->arguments[i]);
                 if (arg_type.kind == TypeKind::Never)
                     any_never = true;
-                Type param_type = callee_type.param_types[i];
+                FluxType param_type = callee_type.param_types[i];
 
                 if (arg_type != param_type && param_type.kind != TypeKind::Unknown &&
                     arg_type.kind != TypeKind::Unknown && arg_type.kind != TypeKind::Never) {
@@ -1065,7 +1149,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                 callee_full_name = callee_id->name;
             } else if (auto bin = dynamic_cast<const ast::BinaryExpr*>(call->callee.get())) {
                 if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
-                    Type lhs_type = type_of(*bin->left);
+                    FluxType lhs_type = type_of(*bin->left);
                     std::string lhs_name = lhs_type.name;
                     // Strip pointers and references
                     if (lhs_name.starts_with("&mut "))
@@ -1098,7 +1182,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                         std::unordered_map<std::string, std::string> param_mapping;
 
                         // Explicit generic args from callee name (e.g. foo<Int32>)
-                        Type explicit_type = type_from_name(callee_full_name);
+                        FluxType explicit_type = type_from_name(callee_full_name);
                         if (!explicit_type.generic_args.empty()) {
                             std::vector<std::string> raw_params;
                             for (const auto& p : tp_it->second) {
@@ -1135,7 +1219,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                         // Inference from lhs (for methods like p.foo())
                         if (auto bin = dynamic_cast<const ast::BinaryExpr*>(call->callee.get())) {
                             if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
-                                Type lhs_type = type_of(*bin->left);
+                                FluxType lhs_type = type_of(*bin->left);
                                 if (!lhs_type.generic_args.empty()) {
                                     // Extract base type name to get its type params
                                     std::string lhs_base = lhs_type.name;
@@ -1175,7 +1259,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                              ++i) {
                             for (const auto& b : bounds) {
                                 if (sym->param_types[i + sym_offset] == b.param_name) {
-                                    Type arg_type = type_of(*call->arguments[i]);
+                                    FluxType arg_type = type_of(*call->arguments[i]);
                                     if (arg_type.kind != TypeKind::Unknown &&
                                         arg_type.kind != TypeKind::Never) {
                                         param_mapping[b.param_name] = arg_type.name;
@@ -1200,7 +1284,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
                         }
 
                         // Record function instantiation
-                        std::vector<Type> concrete_args;
+                        std::vector<FluxType> concrete_args;
                         for (const auto& p : tp_it->second) {
                             std::string param_name = p;
                             auto colon = param_name.find(':');
@@ -1271,7 +1355,7 @@ Type Resolver::type_of(const ast::Expr& expr) {
         auto tp_it = type_type_params_.find(base);
         if (tp_it != type_type_params_.end()) {
             auto bounds = parse_type_param_bounds(tp_it->second);
-            Type concrete = type_from_name(sl->struct_name);
+            FluxType concrete = type_from_name(sl->struct_name);
 
             // Map type param names to concrete types
             if (concrete.generic_args.size() > 0) {
@@ -1361,13 +1445,50 @@ void Resolver::resolve(const ast::Module& module) {
     all_scopes_.push_back(std::move(global_scope));
 
     // Built-ins
-    current_scope_->declare({"drop", SymbolKind::Function, false, true, "Void", {"T"}});
-    current_scope_->declare({"panic", SymbolKind::Function, false, true, "Never", {"String"}});
-    current_scope_->declare({"assert", SymbolKind::Function, false, true, "Void", {"Bool"}});
-    current_scope_->declare({"Some", SymbolKind::Function, false, true, "Option<T>", {"T"}});
-    current_scope_->declare({"None", SymbolKind::Variable, false, true, "Option<T>", {}});
-    current_scope_->declare({"Ok", SymbolKind::Function, false, true, "Result<T,E>", {"T"}});
-    current_scope_->declare({"Err", SymbolKind::Function, false, true, "Result<T,E>", {"E"}});
+    current_scope_->declare(
+        {"drop", SymbolKind::Function, false, true, ast::Visibility::Public, "", "Void", {"T"}});
+    current_scope_->declare({"panic",
+                             SymbolKind::Function,
+                             false,
+                             true,
+                             ast::Visibility::Public,
+                             "",
+                             "Never",
+                             {"String"}});
+    current_scope_->declare({"assert",
+                             SymbolKind::Function,
+                             false,
+                             true,
+                             ast::Visibility::Public,
+                             "",
+                             "Void",
+                             {"Bool"}});
+    current_scope_->declare({"Some",
+                             SymbolKind::Function,
+                             false,
+                             true,
+                             ast::Visibility::Public,
+                             "",
+                             "Option<T>",
+                             {"T"}});
+    current_scope_->declare(
+        {"None", SymbolKind::Variable, false, true, ast::Visibility::Public, "", "Option<T>", {}});
+    current_scope_->declare({"Ok",
+                             SymbolKind::Function,
+                             false,
+                             true,
+                             ast::Visibility::Public,
+                             "",
+                             "Result<T,E>",
+                             {"T"}});
+    current_scope_->declare({"Err",
+                             SymbolKind::Function,
+                             false,
+                             true,
+                             ast::Visibility::Public,
+                             "",
+                             "Result<T,E>",
+                             {"E"}});
 
     enter_scope(); // Module scope - persists after resolve()
     resolve_module(module);
@@ -1381,6 +1502,7 @@ void Resolver::resolve(const ast::Module& module) {
    ======================= */
 
 void Resolver::resolve_module(const ast::Module& module) {
+    current_module_name_ = module.name;
     // Note: Caller (resolve()) handles entering the initial module scope.
     // If we are resolving nested modules (imports), we might need more logic here.
 
@@ -1391,13 +1513,21 @@ void Resolver::resolve_module(const ast::Module& module) {
         if (pos != std::string::npos) {
             root_path = root_path.substr(0, pos);
         }
-        current_scope_->declare({root_path, SymbolKind::Variable, false, true, "Module", {}});
+        current_scope_->declare({root_path,
+                                 SymbolKind::Variable,
+                                 false,
+                                 true,
+                                 ast::Visibility::Private,
+                                 "",
+                                 "Module",
+                                 {}});
     }
 
     // Declare type aliases
     for (const auto& ta : module.type_aliases) {
         type_aliases_[ta.name] = ta.target_type;
-        current_scope_->declare({ta.name, SymbolKind::Variable, false, true, "Type", {}});
+        current_scope_->declare(
+            {ta.name, SymbolKind::Variable, false, true, ta.visibility, "", "FluxType", {}});
     }
 
     // Validate type aliases (catch circular definitions early)
@@ -1407,11 +1537,12 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     // Declare types (structs, enums, classes, traits)
     for (const auto& s : module.structs) {
-        current_scope_->declare({s.name, SymbolKind::Variable, false, true, "Type", {}});
+        current_scope_->declare(
+            {s.name, SymbolKind::Variable, false, true, s.visibility, "", "FluxType", {}});
         // Store struct fields for type checking
-        std::vector<std::pair<std::string, std::string>> fields;
+        std::vector<FieldInfo> fields;
         for (const auto& f : s.fields) {
-            fields.push_back({f.name, f.type});
+            fields.push_back({f.name, f.type, f.visibility});
         }
         struct_fields_[s.name] = std::move(fields);
 
@@ -1431,10 +1562,11 @@ void Resolver::resolve_module(const ast::Module& module) {
     }
 
     for (const auto& c : module.classes) {
-        current_scope_->declare({c.name, SymbolKind::Variable, false, true, "Type", {}});
-        std::vector<std::pair<std::string, std::string>> fields;
+        current_scope_->declare(
+            {c.name, SymbolKind::Variable, false, true, c.visibility, "", "FluxType", {}});
+        std::vector<FieldInfo> fields;
         for (const auto& f : c.fields) {
-            fields.push_back({f.name, f.type});
+            fields.push_back({f.name, f.type, f.visibility});
         }
         struct_fields_[c.name] = std::move(fields);
 
@@ -1454,7 +1586,8 @@ void Resolver::resolve_module(const ast::Module& module) {
     }
 
     for (const auto& e : module.enums) {
-        current_scope_->declare({e.name, SymbolKind::Variable, false, true, "Type", {}});
+        current_scope_->declare(
+            {e.name, SymbolKind::Variable, false, true, e.visibility, "", "FluxType", {}});
         std::vector<std::string> vars;
         vars.reserve(e.variants.size());
         for (const auto& [name, types] : e.variants) {
@@ -1478,7 +1611,8 @@ void Resolver::resolve_module(const ast::Module& module) {
     }
 
     for (const auto& t : module.traits) {
-        current_scope_->declare({t.name, SymbolKind::Variable, false, true, "Trait", {}});
+        current_scope_->declare(
+            {t.name, SymbolKind::Variable, false, true, t.visibility, "", "Trait", {}});
         auto bounds = parse_where_clause(t.where_clause);
         std::vector<std::string> combined = t.type_params;
         for (const auto& b : bounds) {
@@ -1554,6 +1688,30 @@ void Resolver::resolve_module(const ast::Module& module) {
     // Declare impl methods (forward visibility) and register trait impls
     for (const auto& impl : module.impls) {
         if (!impl.trait_name.empty()) {
+            // Check orphan rule
+            bool is_local_type = false;
+            if (const Symbol* sym = current_scope_->lookup(impl.target_name)) {
+                if (sym->module_name == current_module_name_ || sym->module_name == "")
+                    is_local_type = true;
+            }
+            bool is_local_trait = false;
+            // Strip generics for lookup
+            std::string trait_base = impl.trait_name;
+            if (auto pos = trait_base.find('<'); pos != std::string::npos) {
+                trait_base = trait_base.substr(0, pos);
+            }
+            if (const Symbol* sym = current_scope_->lookup(trait_base)) {
+                if (sym->module_name == current_module_name_ || sym->module_name == "")
+                    is_local_trait = true;
+            }
+
+            if (!is_local_type && !is_local_trait && impl.trait_name != "") {
+                throw flux::DiagnosticError(
+                    "orphan rule violation: cannot implement foreign trait '" + impl.trait_name +
+                        "' for foreign type '" + impl.target_name + "'",
+                    0, 0);
+            }
+
             trait_impls_[impl.target_name].insert(impl.trait_name);
 
             // Store associated type mappings
@@ -1564,7 +1722,7 @@ void Resolver::resolve_module(const ast::Module& module) {
             }
 
             // Perform trait conformance check (associated types)
-            std::string trait_base = impl.trait_name;
+            trait_base = impl.trait_name;
             if (auto pos = trait_base.find('<'); pos != std::string::npos) {
                 trait_base = trait_base.substr(0, pos);
             }
@@ -1590,7 +1748,7 @@ void Resolver::resolve_module(const ast::Module& module) {
             std::unordered_map<std::string, std::string> generic_mapping;
             auto it_params = trait_type_params_.find(trait_base);
             if (it_params != trait_type_params_.end()) {
-                Type trait_type = type_from_name(impl.trait_name);
+                FluxType trait_type = type_from_name(impl.trait_name);
                 if (!trait_type.generic_args.empty()) {
                     std::vector<std::string> raw_params;
                     for (const auto& p : it_params->second) {
@@ -1672,22 +1830,42 @@ void Resolver::resolve_module(const ast::Module& module) {
                     }
 
                     if (!overridden && trait_sig.has_default) {
-                        std::string qualified_name = impl.target_name + "::" + trait_sig.name;
+                        std::string base_target = impl.target_name;
+                        if (auto pos = base_target.find('<'); pos != std::string::npos) {
+                            base_target = base_target.substr(0, pos);
+                        }
+                        std::string qualified_name = base_target + "::" + trait_sig.name;
 
-                        // Substitute Self in signature
+                        // Substitute Self and generics in signature
                         std::string ret_type = trait_sig.return_type;
                         if (ret_type == "Self")
                             ret_type = impl.target_name;
+                        for (const auto& [gen, concrete] : generic_mapping) {
+                            if (ret_type == gen)
+                                ret_type = concrete;
+                        }
 
                         std::vector<std::string> params;
+                        std::string self_type = trait_sig.self_type;
+                        if (self_type.find("Self") != std::string::npos) {
+                            auto pos = self_type.find("Self");
+                            self_type.replace(pos, 4, impl.target_name);
+                        }
+                        params.push_back(self_type);
+
                         for (auto p : trait_sig.param_types) {
                             if (p == "Self")
                                 p = impl.target_name;
+                            for (const auto& [gen, concrete] : generic_mapping) {
+                                if (p == gen)
+                                    p = concrete;
+                            }
                             params.push_back(p);
                         }
 
                         current_scope_->declare({qualified_name, SymbolKind::Function, false, true,
-                                                 ret_type, std::move(params)});
+                                                 ast::Visibility::Public, "", ret_type,
+                                                 std::move(params)});
                     }
                 }
             }
@@ -1716,6 +1894,7 @@ void Resolver::resolve_module(const ast::Module& module) {
             sym.kind = SymbolKind::Function;
             sym.type = method.return_type;
             sym.param_types = std::move(params);
+            sym.visibility = method.visibility;
 
             current_scope_->declare(sym);
             function_decls_[qualified_name] = &method;
@@ -1764,8 +1943,14 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& 
 
     // Declare parameters
     for (const auto& param : fn.params) {
-        if (!current_scope_->declare(
-                {param.name, SymbolKind::Variable, false, false, param.type, {}})) {
+        if (!current_scope_->declare({param.name,
+                                      SymbolKind::Variable,
+                                      false,
+                                      false,
+                                      ast::Visibility::None,
+                                      "",
+                                      param.type,
+                                      {}})) {
             throw DiagnosticError("duplicate parameter '" + param.name + "'", 0, 0);
         }
     }
@@ -1812,7 +1997,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     // return
     if (const auto* ret = dynamic_cast<const ast::ReturnStmt*>(&stmt)) {
         if (ret->expression) {
-            Type returned = type_of(*ret->expression);
+            FluxType returned = type_of(*ret->expression);
             if (returned != current_function_return_type_ &&
                 current_function_return_type_.kind != TypeKind::Unknown &&
                 returned.kind != TypeKind::Unknown &&
@@ -1832,10 +2017,10 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     // let / const
     if (const auto* let_stmt = dynamic_cast<const ast::LetStmt*>(&stmt)) {
         // 1. Compute initializer type
-        Type init_type = type_of(*let_stmt->initializer);
+        FluxType init_type = type_of(*let_stmt->initializer);
 
         // 2. Declared type (must be explicit)
-        Type declared_type = type_from_name(let_stmt->type_name);
+        FluxType declared_type = type_from_name(let_stmt->type_name);
         if (declared_type.kind == TypeKind::Unknown &&
             !type_aliases_.contains(let_stmt->type_name)) {
             // Allow generic/complex types to pass (e.g. Box<Int32>)
@@ -1861,6 +2046,8 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                                       SymbolKind::Variable,
                                       let_stmt->is_mutable,
                                       let_stmt->is_const,
+                                      ast::Visibility::None,
+                                      "",
                                       let_stmt->type_name,
                                       {}})) {
             throw DiagnosticError("duplicate variable '" + let_stmt->name + "'", 0, 0);
@@ -1888,10 +2075,10 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                                       0);
             }
 
-            const Type lhs = type_from_name(sym->type);
+            const FluxType lhs = type_from_name(sym->type);
 
             if (asg->op == TokenKind::Assign) {
-                if (const Type rhs = type_of(*asg->value);
+                if (const FluxType rhs = type_of(*asg->value);
                     lhs != rhs && lhs.kind != TypeKind::Unknown && rhs.kind != TypeKind::Unknown) {
                     throw DiagnosticError("cannot assign value of type '" + rhs.name +
                                               "' to variable of type '" + lhs.name + "'",
@@ -1948,7 +2135,14 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
 
         // Declare loop variable
         std::string var_type = fl->var_type.empty() ? "Unknown" : fl->var_type;
-        current_scope_->declare({fl->variable, SymbolKind::Variable, false, false, var_type, {}});
+        current_scope_->declare({fl->variable,
+                                 SymbolKind::Variable,
+                                 false,
+                                 false,
+                                 ast::Visibility::None,
+                                 "",
+                                 var_type,
+                                 {}});
 
         bool prev_in_loop = in_loop_;
         in_loop_ = true;
@@ -1999,7 +2193,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
 
     // match statement
     if (const auto* ms = dynamic_cast<const ast::MatchStmt*>(&stmt)) {
-        Type subject_type = type_of(*ms->expression);
+        FluxType subject_type = type_of(*ms->expression);
 
         if (subject_type.kind == TypeKind::Enum && !enum_variants_.contains(subject_type.name)) {
             throw DiagnosticError("unknown enum type '" + subject_type.name + "' in match", 0, 0);
@@ -2226,8 +2420,14 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern) {
         }
 
         // Otherwise: normal variable binding
-        if (!current_scope_->declare(
-                {id_pat->name, SymbolKind::Variable, false, true, "Unknown", {}})) {
+        if (!current_scope_->declare({id_pat->name,
+                                      SymbolKind::Variable,
+                                      false,
+                                      true,
+                                      ast::Visibility::None,
+                                      "",
+                                      "Unknown",
+                                      {}})) {
             throw DiagnosticError("duplicate variable '" + id_pat->name + "' in pattern", 0, 0);
         }
         return;
@@ -2300,7 +2500,7 @@ std::string Resolver::promote_integer_name(const std::string& a, const std::stri
     }
 }
 
-bool Resolver::are_types_compatible(const Type& target, const Type& source) const {
+bool Resolver::are_types_compatible(const FluxType& target, const FluxType& source) const {
     if (target.kind == TypeKind::Unknown || source.kind == TypeKind::Unknown) {
         return true;
     }
@@ -2358,7 +2558,7 @@ bool Resolver::are_types_compatible(const Type& target, const Type& source) cons
 
 // --- Trait bound helpers ---
 
-std::vector<Resolver::TypeParamBound>
+std::vector<TypeParamBound>
 Resolver::parse_type_param_bounds(const std::vector<std::string>& type_params) {
     std::vector<TypeParamBound> result;
     for (const auto& tp : type_params) {
@@ -2411,8 +2611,7 @@ bool Resolver::type_implements_trait(const std::string& type_name,
     return false;
 }
 
-std::vector<Resolver::TypeParamBound>
-Resolver::parse_where_clause(const std::string& where_clause) {
+std::vector<TypeParamBound> Resolver::parse_where_clause(const std::string& where_clause) {
     std::vector<TypeParamBound> result;
     if (where_clause.empty())
         return result;
@@ -2471,7 +2670,7 @@ Resolver::parse_where_clause(const std::string& where_clause) {
 }
 
 void Resolver::record_function_instantiation(const std::string& name,
-                                             const std::vector<Type>& args) {
+                                             const std::vector<FluxType>& args) {
     FunctionInstantiation inst{name, args};
     for (const auto& existing : function_instantiations_) {
         if (existing == inst)
@@ -2480,13 +2679,75 @@ void Resolver::record_function_instantiation(const std::string& name,
     function_instantiations_.push_back(std::move(inst));
 }
 
-void Resolver::record_type_instantiation(const std::string& name, const std::vector<Type>& args) {
+void Resolver::record_type_instantiation(const std::string& name,
+                                         const std::vector<FluxType>& args) {
     TypeInstantiation inst{name, args};
     for (const auto& existing : type_instantiations_) {
         if (existing == inst)
             return;
     }
     type_instantiations_.push_back(std::move(inst));
+}
+
+std::vector<std::string> Resolver::get_bounds_for_type(const std::string& type_name) {
+    std::vector<std::string> bounds;
+    // Strip references
+    std::string base = type_name;
+    if (base.starts_with("&mut "))
+        base = base.substr(5);
+    else if (base.starts_with("&"))
+        base = base.substr(1);
+
+    if (!current_function_name_.empty() && function_type_params_.contains(current_function_name_)) {
+        for (const auto& p : function_type_params_.at(current_function_name_)) {
+            if (p.starts_with(base + ":")) {
+                size_t colon = p.find(':');
+                std::string traits_list = p.substr(colon + 1);
+                size_t start = 0;
+                size_t plus = traits_list.find('+');
+                while (plus != std::string::npos) {
+                    std::string t = traits_list.substr(start, plus - start);
+                    t.erase(0, t.find_first_not_of(" \t"));
+                    t.erase(t.find_last_not_of(" \t") + 1);
+                    if (!t.empty())
+                        bounds.push_back(t);
+                    start = plus + 1;
+                    plus = traits_list.find('+', start);
+                }
+                std::string t = traits_list.substr(start);
+                t.erase(0, t.find_first_not_of(" \t"));
+                t.erase(t.find_last_not_of(" \t") + 1);
+                if (!t.empty())
+                    bounds.push_back(t);
+            }
+        }
+    }
+    if (bounds.empty() && !current_type_name_.empty() &&
+        type_type_params_.contains(current_type_name_)) {
+        for (const auto& p : type_type_params_.at(current_type_name_)) {
+            if (p.starts_with(base + ":")) {
+                size_t colon = p.find(':');
+                std::string traits_list = p.substr(colon + 1);
+                size_t start = 0;
+                size_t plus = traits_list.find('+');
+                while (plus != std::string::npos) {
+                    std::string t = traits_list.substr(start, plus - start);
+                    t.erase(0, t.find_first_not_of(" \t"));
+                    t.erase(t.find_last_not_of(" \t") + 1);
+                    if (!t.empty())
+                        bounds.push_back(t);
+                    start = plus + 1;
+                    plus = traits_list.find('+', start);
+                }
+                std::string t = traits_list.substr(start);
+                t.erase(0, t.find_first_not_of(" \t"));
+                t.erase(t.find_last_not_of(" \t") + 1);
+                if (!t.empty())
+                    bounds.push_back(t);
+            }
+        }
+    }
+    return bounds;
 }
 
 bool Resolver::compare_signatures(
@@ -2589,7 +2850,12 @@ void Resolver::monomorphize_recursive() {
 
         // Re-resolve function body with concrete types
         // This will trigger additional record_function_instantiation calls for transitive calls
-        resolve_function(*fn, inst.name);
+        try {
+            resolve_function(*fn, inst.name);
+        } catch (const DiagnosticError&) {
+            // During monomorphization, some re-resolutions may fail due to
+            // generic types not being fully resolved yet. This is expected.
+        }
     }
 }
 

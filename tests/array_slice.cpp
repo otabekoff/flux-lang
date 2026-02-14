@@ -14,7 +14,7 @@ void test_array_type_resolution() {
     elems.push_back(std::make_unique<NumberExpr>("3"));
     ArrayExpr arr(std::move(elems));
     Resolver resolver;
-    Type t = resolver.type_of(arr);
+    FluxType t = resolver.type_of(arr);
     assert(t.kind == TypeKind::Array);
     assert(t.name == "[Int32;3]");
 }
@@ -44,7 +44,7 @@ void test_slice_type_resolution() {
     SliceExpr slice(std::move(arr_ptr), std::make_unique<NumberExpr>("0"),
                     std::make_unique<NumberExpr>("2"));
     Resolver resolver;
-    Type t = resolver.type_of(slice);
+    FluxType t = resolver.type_of(slice);
     assert(t.kind == TypeKind::Slice);
     assert(t.name == "[Int32]");
 }

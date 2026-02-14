@@ -12,6 +12,9 @@ enum class TokenKind {
     Char,
     Keyword,
     Annotation, // @test, @doc, etc.
+    Pub,
+    Public,
+    Private,
 
     // punctuation
     Semicolon,  // ;
@@ -88,6 +91,12 @@ inline const char* to_string(TokenKind kind) {
         return "Keyword";
     case TokenKind::Annotation:
         return "Annotation";
+    case TokenKind::Pub:
+        return "Pub";
+    case TokenKind::Public:
+        return "Public";
+    case TokenKind::Private:
+        return "Private";
 
     case TokenKind::Semicolon:
         return "Semicolon";
