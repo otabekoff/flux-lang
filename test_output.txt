@@ -1,0 +1,8 @@
+test_tuple_destructuring_let passed.
+test_match_tuple_pattern passed.
+test_match_struct_pattern passed.
+test_nested_patterns passed.
+test_range_patterns passed.
+test_or_patterns passed.
+test_exhaustive_nested_option failed: error: expected type name at 2:47
+Assertion failed: false, file D:\project\tutorial\flux\tests\pattern_matching.cpp, line 38

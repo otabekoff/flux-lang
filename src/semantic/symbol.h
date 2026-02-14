@@ -17,6 +17,7 @@ struct Symbol {
     bool is_mutable = false;
     bool is_const = false;
     bool is_moved = false;
+    bool is_initialized = false;
     ast::Visibility visibility = ast::Visibility::None;
     std::string module_name;
 

@@ -69,6 +69,11 @@ struct Resolver {
     bool is_pattern_exhaustive(const FluxType& type,
                                const std::vector<const ast::Pattern*>& patterns) const;
 
+    // Initialization state management
+    std::unordered_map<Symbol*, bool> save_initialization_state();
+    void restore_initialization_state(const std::unordered_map<Symbol*, bool>& state);
+    void intersect_initialization_state(const std::unordered_map<Symbol*, bool>& other_state);
+
     // Monomorphization accessors
     const std::vector<FunctionInstantiation>& function_instantiations() const {
         return function_instantiations_;

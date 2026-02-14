@@ -691,8 +691,12 @@ ast::StmtPtr Parser::parse_statement() {
         }
         if (peek().lexeme == "break") {
             advance();
+            ast::ExprPtr value = nullptr;
+            if (peek().kind != TokenKind::Semicolon) {
+                value = parse_expression();
+            }
             expect(TokenKind::Semicolon, "expected ';' after 'break'");
-            return std::make_unique<ast::BreakStmt>();
+            return std::make_unique<ast::BreakStmt>(std::move(value));
         }
         if (peek().lexeme == "continue") {
             advance();
@@ -783,8 +787,10 @@ ast::StmtPtr Parser::parse_let_statement() {
     std::string type_name;
     expect(TokenKind::Colon, "expected ':'");
     type_name = parse_type();
-    expect(TokenKind::Assign, "expected '='");
-    ast::ExprPtr initializer = parse_expression();
+    ast::ExprPtr initializer = nullptr;
+    if (match(TokenKind::Assign)) {
+        initializer = parse_expression();
+    }
     expect(TokenKind::Semicolon, "expected ';'");
     if (!tuple_names.empty()) {
         return std::make_unique<ast::LetStmt>(std::move(tuple_names), std::move(type_name),

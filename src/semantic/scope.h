@@ -45,6 +45,9 @@ class Scope {
     const std::unordered_map<std::string, Symbol>& get_symbols() const {
         return symbols_;
     }
+    std::unordered_map<std::string, Symbol>& get_symbols_mut() {
+        return symbols_;
+    }
 
   private:
     Scope* parent_;

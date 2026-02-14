@@ -81,10 +81,10 @@ Complete the resolver so that every language feature described in the spec is fu
 
 ### 1.6 Control Flow Analysis
 
-- [ ] **Definite assignment analysis** — error on reading a variable before it's assigned.
-- [ ] **Unreachable code detection** — warn on code after `return`, `break`, `continue`, `panic()`.
-- [ ] **Loop break-value analysis** — `break value` in `loop` for expression-valued loops.
-- [ ] **For-loop iterator type propagation** — infer the loop variable type from the iterable.
+- [x] **Definite assignment analysis** — error on reading a variable before it's assigned.
+- [x] **Unreachable code detection** — warn (error in Flux) on code after `return`, `break`, `continue`, `panic()`.
+- [x] **Loop break-value analysis** — `break value` in `loop` for expression-valued loops.
+- [x] **For-loop iterator type propagation** — infer the loop variable type from the iterable.
 
 ### 1.7 Error Handling
 

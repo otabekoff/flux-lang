@@ -89,6 +89,7 @@ add_flux_test(trait_default_generic)
 add_flux_test(visibility)
 add_flux_test(orphan_rule)
 add_flux_test(pattern_matching)
+add_flux_test(control_flow)
 
 
 # By this what we've earned?

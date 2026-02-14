@@ -394,8 +394,11 @@ struct LoopStmt : Stmt {
 };
 
 struct BreakStmt : Stmt {
+    ExprPtr value; // optional
+    explicit BreakStmt(ExprPtr v = nullptr) : value(std::move(v)) {}
     std::unique_ptr<Node> clone() const override {
-        return std::make_unique<BreakStmt>();
+        return std::make_unique<BreakStmt>(
+            value ? std::unique_ptr<Expr>(static_cast<Expr*>(value->clone().release())) : nullptr);
     }
 };
 struct ContinueStmt : Stmt {

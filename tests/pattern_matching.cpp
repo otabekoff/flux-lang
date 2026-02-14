@@ -1,3 +1,4 @@
+#include "lexer/diagnostic.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 #include "semantic/resolver.h"
@@ -9,10 +10,12 @@
 bool manual_contains(const char* haystack, const char* needle) {
     if (!haystack || !needle)
         return false;
+    if (needle[0] == '\0')
+        return true;
     for (int i = 0; haystack[i] != '\0'; ++i) {
         bool match = true;
         for (int j = 0; needle[j] != '\0'; ++j) {
-            if (haystack[i + j] != needle[j]) {
+            if (haystack[i + j] == '\0' || haystack[i + j] != needle[j]) {
                 match = false;
                 break;
             }
@@ -30,7 +33,7 @@ void run_test(const std::string& code, const std::string& test_name) {
         flux::Parser parser(tokens);
         auto module = parser.parse_module();
         flux::semantic::Resolver resolver;
-        resolver.resolve(*module);
+        resolver.resolve(module);
         std::cout << test_name << " passed.\n";
     } catch (const std::exception& e) {
         std::cerr << test_name << " failed: " << e.what() << "\n";
@@ -135,7 +138,7 @@ void test_exhaustiveness() {
     // 1. Exhaustive nested Option
     {
         std::string code = R"(
-            func test(opt: Option<Option<Int32>>) {
+            func test(opt: Option<Option<Int32> >) {
                 match opt {
                     Some(Some(_)) => {},
                     Some(None) => {},
@@ -149,7 +152,7 @@ void test_exhaustiveness() {
     // 2. Non-exhaustive nested Option (missing Some(None))
     {
         std::string code = R"(
-            func test(opt: Option<Option<Int32>>) {
+            func test(opt: Option<Option<Int32> >) {
                 match opt {
                     Some(Some(_)) => {},
                     None => {}
@@ -160,7 +163,7 @@ void test_exhaustiveness() {
             flux::Lexer lexer(code);
             flux::Parser parser(lexer.tokenize());
             flux::semantic::Resolver resolver;
-            resolver.resolve(*parser.parse_module());
+            resolver.resolve(parser.parse_module());
             assert(false && "Should have failed exhaustiveness check");
         } catch (const flux::DiagnosticError& e) {
             assert(manual_contains(e.what(), "non-exhaustive"));
@@ -181,7 +184,7 @@ void test_exhaustiveness() {
             flux::Lexer lexer(code);
             flux::Parser parser(lexer.tokenize());
             flux::semantic::Resolver resolver;
-            resolver.resolve(*parser.parse_module());
+            resolver.resolve(parser.parse_module());
             assert(false && "Should have failed guarded exhaustiveness check");
         } catch (const flux::DiagnosticError& e) {
             assert(manual_contains(e.what(), "non-exhaustive"));

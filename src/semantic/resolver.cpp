@@ -623,6 +623,43 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
             return t;
         }
 
+        if (id->name == "panic") {
+            return {TypeKind::Function,
+                    "(String) -> Never",
+                    false,
+                    {type_from_name("String")},
+                    std::make_unique<FluxType>(never_type())};
+        }
+        if (id->name == "drop") {
+            return {TypeKind::Function,
+                    "(T) -> Void",
+                    false,
+                    {unknown()},
+                    std::make_unique<FluxType>(void_type())};
+        }
+        if (id->name == "assert") {
+            return {TypeKind::Function,
+                    "(Bool, String) -> Void",
+                    false,
+                    {type_from_name("Bool"), type_from_name("String")},
+                    std::make_unique<FluxType>(void_type())};
+        }
+        if (id->name == "Some") {
+            FluxType t(TypeKind::Function, "(T) -> Option<T>");
+            t.generic_args.push_back(unknown());
+            return t;
+        }
+        if (id->name == "Ok") {
+            FluxType t(TypeKind::Function, "(T) -> Result<T, E>");
+            t.generic_args.push_back(unknown());
+            return t;
+        }
+        if (id->name == "Err") {
+            FluxType t(TypeKind::Function, "(E) -> Result<T, E>");
+            t.generic_args.push_back(unknown());
+            return t;
+        }
+
         std::string lookup_name = id->name;
         if (auto pos = lookup_name.find('<'); pos != std::string::npos) {
             lookup_name = lookup_name.substr(0, pos);
@@ -1483,6 +1520,7 @@ void Resolver::resolve(const ast::Module& module) {
                              false,
                              true,
                              false,
+                             true, // is_initialized
                              ast::Visibility::Public,
                              "",
                              "Void",
@@ -1492,6 +1530,7 @@ void Resolver::resolve(const ast::Module& module) {
                              false,
                              true,
                              false,
+                             true, // is_initialized
                              ast::Visibility::Public,
                              "",
                              "Never",
@@ -1501,6 +1540,7 @@ void Resolver::resolve(const ast::Module& module) {
                              false,
                              true,
                              false,
+                             true, // is_initialized
                              ast::Visibility::Public,
                              "",
                              "Void",
@@ -1510,6 +1550,7 @@ void Resolver::resolve(const ast::Module& module) {
                              false,
                              true,
                              false,
+                             true, // is_initialized
                              ast::Visibility::Public,
                              "",
                              "Option<T>",
@@ -1519,6 +1560,7 @@ void Resolver::resolve(const ast::Module& module) {
                              false,
                              true,
                              false,
+                             true, // is_initialized
                              ast::Visibility::Public,
                              "",
                              "Option<T>",
@@ -1528,6 +1570,7 @@ void Resolver::resolve(const ast::Module& module) {
                              false,
                              true,
                              false,
+                             true, // is_initialized
                              ast::Visibility::Public,
                              "",
                              "Result<T,E>",
@@ -1537,6 +1580,7 @@ void Resolver::resolve(const ast::Module& module) {
                              false,
                              true,
                              false,
+                             true, // is_initialized
                              ast::Visibility::Public,
                              "",
                              "Result<T,E>",
@@ -1570,6 +1614,7 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  false,
                                  true,
                                  false,
+                                 true, // is_initialized
                                  ast::Visibility::Private,
                                  "",
                                  "Module",
@@ -1579,8 +1624,16 @@ void Resolver::resolve_module(const ast::Module& module) {
     // Declare type aliases
     for (const auto& ta : module.type_aliases) {
         type_aliases_[ta.name] = ta.target_type;
-        current_scope_->declare(
-            {ta.name, SymbolKind::Variable, false, true, false, ta.visibility, "", "FluxType", {}});
+        current_scope_->declare({ta.name,
+                                 SymbolKind::Variable,
+                                 false,
+                                 true,
+                                 false,
+                                 true,
+                                 ta.visibility,
+                                 "",
+                                 "FluxType",
+                                 {}});
     }
 
     // Validate type aliases (catch circular definitions early)
@@ -1590,8 +1643,16 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     // Declare types (structs, enums, classes, traits)
     for (const auto& s : module.structs) {
-        current_scope_->declare(
-            {s.name, SymbolKind::Variable, false, true, false, s.visibility, "", "FluxType", {}});
+        current_scope_->declare({s.name,
+                                 SymbolKind::Variable,
+                                 false,
+                                 true,
+                                 false,
+                                 true,
+                                 s.visibility,
+                                 "",
+                                 "FluxType",
+                                 {}});
         // Store struct fields for type checking
         std::vector<FieldInfo> fields;
         for (const auto& f : s.fields) {
@@ -1615,8 +1676,16 @@ void Resolver::resolve_module(const ast::Module& module) {
     }
 
     for (const auto& c : module.classes) {
-        current_scope_->declare(
-            {c.name, SymbolKind::Variable, false, true, false, c.visibility, "", "FluxType", {}});
+        current_scope_->declare({c.name,
+                                 SymbolKind::Variable,
+                                 false,
+                                 true,
+                                 false,
+                                 true,
+                                 c.visibility,
+                                 "",
+                                 "FluxType",
+                                 {}});
         std::vector<FieldInfo> fields;
         for (const auto& f : c.fields) {
             fields.push_back({f.name, f.type, f.visibility});
@@ -1639,8 +1708,16 @@ void Resolver::resolve_module(const ast::Module& module) {
     }
 
     for (const auto& e : module.enums) {
-        current_scope_->declare(
-            {e.name, SymbolKind::Variable, false, true, false, e.visibility, "", "FluxType", {}});
+        current_scope_->declare({e.name,
+                                 SymbolKind::Variable,
+                                 false,
+                                 true,
+                                 false,
+                                 true,
+                                 e.visibility,
+                                 "",
+                                 "FluxType",
+                                 {}});
         std::vector<std::string> vars;
         vars.reserve(e.variants.size());
         for (const auto& [name, types] : e.variants) {
@@ -1664,8 +1741,16 @@ void Resolver::resolve_module(const ast::Module& module) {
     }
 
     for (const auto& t : module.traits) {
-        current_scope_->declare(
-            {t.name, SymbolKind::Variable, false, true, false, t.visibility, "", "Trait", {}});
+        current_scope_->declare({t.name,
+                                 SymbolKind::Variable,
+                                 false,
+                                 true,
+                                 false,
+                                 true,
+                                 t.visibility,
+                                 "",
+                                 "Trait",
+                                 {}});
         auto bounds = parse_where_clause(t.where_clause);
         std::vector<std::string> combined = t.type_params;
         for (const auto& b : bounds) {
@@ -1918,7 +2003,7 @@ void Resolver::resolve_module(const ast::Module& module) {
                         }
 
                         current_scope_->declare({qualified_name, SymbolKind::Function, false, true,
-                                                 false, ast::Visibility::Public, "", ret_type,
+                                                 false, true, ast::Visibility::Public, "", ret_type,
                                                  std::move(params)});
                     }
                 }
@@ -2003,6 +2088,7 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& 
                                       false,
                                       false,
                                       false,
+                                      true, // is_initialized
                                       ast::Visibility::None,
                                       "",
                                       param.type,
@@ -2118,7 +2204,8 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                                               SymbolKind::Variable,
                                               let_stmt->is_mutable,
                                               let_stmt->is_const,
-                                              false, // is_moved
+                                              false,                            // is_moved
+                                              let_stmt->initializer != nullptr, // is_initialized
                                               ast::Visibility::None,
                                               "",
                                               stringify_type(init_type.generic_args[i]),
@@ -2132,7 +2219,8 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                                           SymbolKind::Variable,
                                           let_stmt->is_mutable,
                                           let_stmt->is_const,
-                                          false, // is_moved
+                                          false,                            // is_moved
+                                          let_stmt->initializer != nullptr, // is_initialized
                                           ast::Visibility::None,
                                           "",
                                           let_stmt->type_name,
@@ -2164,14 +2252,15 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                 throw DiagnosticError("assignment to undeclared variable '" + id->name + "'", 0, 0);
             }
 
-            if (sym->is_const) {
-                throw DiagnosticError("cannot assign to constant '" + id->name + "'", 0, 0);
+            if (sym->is_const && sym->is_initialized) {
+                throw DiagnosticError("cannot reassign to constant '" + id->name + "'", 0, 0);
             }
 
-            if (!sym->is_mutable) {
-                throw DiagnosticError("cannot assign to immutable variable '" + id->name + "'", 0,
+            if (!sym->is_mutable && sym->is_initialized) {
+                throw DiagnosticError("cannot reassign to immutable variable '" + id->name + "'", 0,
                                       0);
             }
+            sym->is_initialized = true;
 
             const FluxType lhs = type_from_name(sym->type);
 
@@ -2219,14 +2308,33 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     if (const auto* ifs = dynamic_cast<const ast::IfStmt*>(&stmt)) {
         resolve_expression(*ifs->condition);
 
-        bool then_returns = resolve_statement(*ifs->then_branch);
-        bool else_returns = false;
+        auto base_state = save_initialization_state();
+        bool then_diverges = resolve_statement(*ifs->then_branch);
+        auto after_then = save_initialization_state();
 
+        restore_initialization_state(base_state);
+        bool else_diverges = false;
         if (ifs->else_branch) {
-            else_returns = resolve_statement(*ifs->else_branch);
+            else_diverges = resolve_statement(*ifs->else_branch);
         }
+        auto after_else = save_initialization_state();
 
-        return then_returns && else_returns;
+        if (then_diverges && else_diverges) {
+            return true;
+        } else if (then_diverges) {
+            restore_initialization_state(after_else);
+            return false;
+        } else if (else_diverges) {
+            restore_initialization_state(after_then);
+            return false;
+        } else if (!ifs->else_branch) {
+            restore_initialization_state(base_state);
+            return false;
+        } else {
+            restore_initialization_state(after_then);
+            intersect_initialization_state(after_else);
+            return false;
+        }
     }
 
     // while
@@ -2241,17 +2349,27 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
 
     // for loop
     if (const auto* fl = dynamic_cast<const ast::ForStmt*>(&stmt)) {
-        resolve_expression(*fl->iterable);
+        FluxType iterable_type = type_of(*fl->iterable);
 
         enter_scope();
 
+        std::string elem_type = "Unknown";
+        if (iterable_type.kind == TypeKind::Array || iterable_type.kind == TypeKind::Slice) {
+            if (!iterable_type.generic_args.empty()) {
+                elem_type = stringify_type(iterable_type.generic_args[0]);
+            }
+        } else if (iterable_type.name == "Range") {
+            elem_type = "Int32";
+        }
+
         // Declare loop variable
-        std::string var_type = fl->var_type.empty() ? "Unknown" : fl->var_type;
+        std::string var_type = fl->var_type.empty() ? elem_type : fl->var_type;
         current_scope_->declare({fl->variable,
                                  SymbolKind::Variable,
                                  false,
                                  false,
                                  false, // is_moved
+                                 true,  // is_initialized
                                  ast::Visibility::None,
                                  "",
                                  var_type,
@@ -2282,9 +2400,12 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     }
 
     // break
-    if (dynamic_cast<const ast::BreakStmt*>(&stmt)) {
+    if (const auto* brk = dynamic_cast<const ast::BreakStmt*>(&stmt)) {
         if (!in_loop_) {
             throw DiagnosticError("'break' used outside of loop", 0, 0);
+        }
+        if (brk->value) {
+            resolve_expression(*brk->value);
         }
         break_found_ = true;
         return false;
@@ -2307,64 +2428,12 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     // match statement
     if (const auto* ms = dynamic_cast<const ast::MatchStmt*>(&stmt)) {
         FluxType subject_type = type_of(*ms->expression);
+        resolve_expression(*ms->expression);
 
         if (subject_type.kind == TypeKind::Enum && !enum_variants_.contains(subject_type.name)) {
             throw DiagnosticError("unknown enum type '" + subject_type.name + "' in match", 0, 0);
         }
 
-        bool has_wildcard = false;
-        bool all_arms_return = true;
-
-        std::unordered_set<std::string> seen_enum_variants;
-        bool seen_true = false;
-        bool seen_false = false;
-
-        resolve_expression(*ms->expression);
-
-        for (const auto& arm : ms->arms) {
-            // Track patterns
-            if (dynamic_cast<const ast::WildcardPattern*>(arm.pattern.get())) {
-                has_wildcard = true;
-            } else if (const auto* vp =
-                           dynamic_cast<const ast::VariantPattern*>(arm.pattern.get())) {
-                seen_enum_variants.insert(vp->variant_name);
-            } else if (const auto* ip =
-                           dynamic_cast<const ast::IdentifierPattern*>(arm.pattern.get())) {
-                // Check if this identifier is an enum variant (bare variant
-                // name)
-                if (is_enum_variant(ip->name)) {
-                    seen_enum_variants.insert(ip->name);
-                }
-                // Built-in Option/Result variants
-                if (ip->name == "None" || ip->name == "Some" || ip->name == "Ok" ||
-                    ip->name == "Err") {
-                    seen_enum_variants.insert(ip->name);
-                }
-            } else if (const auto* lp =
-                           dynamic_cast<const ast::LiteralPattern*>(arm.pattern.get())) {
-                if (const auto* b = dynamic_cast<const ast::BoolExpr*>(lp->literal.get())) {
-                    if (b->value)
-                        seen_true = true;
-                    else
-                        seen_false = true;
-                }
-            }
-
-            // Resolve arm body in its own scope
-            enter_scope();
-            resolve_pattern(*arm.pattern, subject_type);
-
-            // Resolve guard if present
-            if (arm.guard) {
-                resolve_expression(*arm.guard);
-            }
-
-            bool arm_returns = resolve_statement(*arm.body);
-            exit_scope();
-            all_arms_return = all_arms_return && arm_returns;
-        }
-
-        // Exhaustiveness rules
         std::vector<const ast::Pattern*> patterns_to_check;
         for (const auto& arm : ms->arms) {
             if (!arm.guard) {
@@ -2377,7 +2446,43 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                                       "' (missing cases or add '_' wildcard)",
                                   0, 0);
         }
-        return all_arms_return;
+
+        auto base_state = save_initialization_state();
+        std::vector<std::unordered_map<Symbol*, bool>> arm_states;
+        std::vector<bool> arm_diverges;
+
+        for (const auto& arm : ms->arms) {
+            restore_initialization_state(base_state);
+            enter_scope();
+            resolve_pattern(*arm.pattern, subject_type);
+            if (arm.guard)
+                resolve_expression(*arm.guard);
+            bool diverges = resolve_statement(*arm.body);
+            exit_scope();
+            arm_states.push_back(save_initialization_state());
+            arm_diverges.push_back(diverges);
+        }
+
+        bool all_diverge = true;
+        bool first_non_diverge = true;
+        for (size_t i = 0; i < arm_states.size(); ++i) {
+            if (!arm_diverges[i]) {
+                all_diverge = false;
+                if (first_non_diverge) {
+                    restore_initialization_state(arm_states[i]);
+                    first_non_diverge = false;
+                } else {
+                    intersect_initialization_state(arm_states[i]);
+                }
+            }
+        }
+
+        if (all_diverge) {
+            restore_initialization_state(base_state);
+            return true;
+        }
+
+        return false;
     }
 
     throw DiagnosticError("unsupported statement", 0, 0);
@@ -2405,8 +2510,13 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
         if (!sym) {
             throw DiagnosticError("use of undeclared identifier '" + id->name + "'", 0, 0);
         }
-        if (sym->kind == SymbolKind::Variable && sym->is_moved) {
-            throw DiagnosticError("use of moved value '" + id->name + "'", 0, 0);
+        if (sym->kind == SymbolKind::Variable) {
+            if (!sym->is_initialized) {
+                throw DiagnosticError("use of uninitialized variable '" + id->name + "'", 0, 0);
+            }
+            if (sym->is_moved) {
+                throw DiagnosticError("use of moved value '" + id->name + "'", 0, 0);
+            }
         }
         return;
     }
@@ -2577,6 +2687,7 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern, const FluxType& subj
                                       false,
                                       true,
                                       false, // is_moved
+                                      true,  // is_initialized
                                       ast::Visibility::None,
                                       "",
                                       stringify_type(subject_type),
@@ -2714,6 +2825,7 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern, const FluxType& subj
                                      false,
                                      true,
                                      false,
+                                     true, // is_initialized
                                      ast::Visibility::None,
                                      "",
                                      stringify_type(type),
@@ -3324,6 +3436,35 @@ void Resolver::monomorphize_recursive() {
         } catch (const DiagnosticError&) {
             // During monomorphization, some re-resolutions may fail due to
             // generic types not being fully resolved yet. This is expected.
+        }
+    }
+}
+
+std::unordered_map<Symbol*, bool> Resolver::save_initialization_state() {
+    std::unordered_map<Symbol*, bool> state;
+    Scope* s = current_scope_;
+    while (s) {
+        for (auto& [name, sym] : s->get_symbols_mut()) {
+            if (sym.kind == SymbolKind::Variable) {
+                state[&sym] = sym.is_initialized;
+            }
+        }
+        s = s->parent();
+    }
+    return state;
+}
+
+void Resolver::restore_initialization_state(const std::unordered_map<Symbol*, bool>& state) {
+    for (auto& [sym, init] : state) {
+        sym->is_initialized = init;
+    }
+}
+
+void Resolver::intersect_initialization_state(
+    const std::unordered_map<Symbol*, bool>& other_state) {
+    for (auto& [sym, init] : other_state) {
+        if (!init) {
+            sym->is_initialized = false;
         }
     }
 }
