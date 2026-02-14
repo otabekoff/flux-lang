@@ -72,12 +72,12 @@ Complete the resolver so that every language feature described in the spec is fu
 
 ### 1.5 Pattern Matching
 
-- [ ] **Tuple destructuring type checking** — validate types in `let (x, y) = expr;`.
-- [ ] **Struct pattern type checking** — validate `Point { x, y }` pattern field types.
+- [x] **Tuple destructuring type checking** — validate types in `let (x, y) = expr;`.
+- [x] **Struct pattern type checking** — validate `Point { x, y }` pattern field types.
 - [ ] **Nested pattern exhaustiveness** — check exhaustiveness for `Some(Some(x))` and similar nested patterns.
-- [ ] **Range pattern validation** — `1..10` patterns: validate bounds are of the same type.
-- [ ] **Guard type checking** — match guards `if condition` must be `Bool`.
-- [ ] **Or-patterns** — `Red | Blue => { ... }` combining multiple patterns in one arm.
+- [x] **Range pattern validation** — `1..10` patterns: validate bounds are of the same type.
+- [x] **Guard type checking** — match guards `if condition` must be `Bool`.
+- [x] **Or-patterns** — `Red | Blue => { ... }` combining multiple patterns in one arm.
 
 ### 1.6 Control Flow Analysis
 
@@ -102,6 +102,8 @@ Complete the resolver so that every language feature described in the spec is fu
 - [ ] **`await` context checking** — `await` is only valid inside an `async` function.
 - [ ] **`spawn` validation** — spawned expression must be `async` or a callable.
 - [ ] **`Send`/`Sync` marker traits** — prevent non-thread-safe data from crossing spawn boundaries.
+
+- [ ] Review all of the phase 1 tasks are completed fully or anything missing. Check everything. Build fresh and run tests. Make sure everything is working and completed fully. If anything missing, not done, not implemented, not completed or partially done about pahse 1 tasks, then append as the new tasks to the phase 1 in ROADMAP.md.
 
 ---
 

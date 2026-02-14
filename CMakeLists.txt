@@ -88,6 +88,7 @@ add_flux_test(generic_method_fail)
 add_flux_test(trait_default_generic)
 add_flux_test(visibility)
 add_flux_test(orphan_rule)
+add_flux_test(pattern_matching)
 
 
 # By this what we've earned?

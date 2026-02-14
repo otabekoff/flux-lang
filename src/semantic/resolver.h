@@ -64,7 +64,7 @@ struct Resolver {
     void resolve_function(const ast::FunctionDecl& fn, const std::string& name = "");
     bool resolve_block(const ast::Block& block);
     bool resolve_statement(const ast::Stmt& stmt);
-    void resolve_pattern(const ast::Pattern& pattern);
+    void resolve_pattern(const ast::Pattern& pattern, const FluxType& subject_type);
     void resolve_expression(const ast::Expr& expr);
 
     // Monomorphization accessors
@@ -169,6 +169,7 @@ struct Resolver {
     std::unordered_map<std::string, ::flux::semantic::FluxType> substitution_map_;
 
     static bool is_copy_type(const std::string& type_name);
+    std::string stringify_type(const ::flux::semantic::FluxType& type) const;
     void monomorphize_recursive();
 };
 } // namespace flux::semantic

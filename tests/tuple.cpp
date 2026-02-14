@@ -17,7 +17,7 @@ void test_tuple_expr() {
     Resolver resolver;
     FluxType t = resolver.type_of(tuple);
     assert(t.kind == TypeKind::Tuple);
-    assert(t.name == "(Int32,Float64,Bool)");
+    assert(t.name == "(Int32, Float64, Bool)");
 }
 
 int main() {

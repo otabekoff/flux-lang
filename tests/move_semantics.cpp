@@ -46,7 +46,7 @@ void test_implicit_move_assignment() {
         {"a", SymbolKind::Variable, false, false, false, Visibility::None, "", "String"});
 
     // let b: String = a
-    auto let = std::make_unique<LetStmt>(std::vector<std::string>{"b"}, "String", false, false,
+    auto let = std::make_unique<LetStmt>("b", "String", false, false,
                                          std::make_unique<IdentifierExpr>("a"));
 
     // resolve_statement checks compatibility and marks 'a' as moved
@@ -83,7 +83,7 @@ void test_copy_semantics() {
         {"i", SymbolKind::Variable, false, false, false, Visibility::None, "", "Int32"});
 
     // let j: Int32 = i
-    auto let = std::make_unique<LetStmt>(std::vector<std::string>{"j"}, "Int32", false, false,
+    auto let = std::make_unique<LetStmt>("j", "Int32", false, false,
                                          std::make_unique<IdentifierExpr>("i"));
 
     resolver.resolve_statement(*let);

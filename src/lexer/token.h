@@ -17,21 +17,22 @@ enum class TokenKind {
     Private,
 
     // punctuation
-    Semicolon,  // ;
-    Colon,      // :
-    Comma,      // ,
-    Dot,        // .
-    DotDot,     // ..
-    Ellipsis,   // ...
-    LParen,     // (
-    RParen,     // )
-    LBrace,     // {
-    RBrace,     // }
-    LBracket,   // [
-    RBracket,   // ]
-    Arrow,      // ->
-    FatArrow,   // =>
-    ColonColon, // ::
+    Semicolon,   // ;
+    Colon,       // :
+    Comma,       // ,
+    Dot,         // .
+    DotDot,      // ..
+    DotDotEqual, // ..=
+    Ellipsis,    // ...
+    LParen,      // (
+    RParen,      // )
+    LBrace,      // {
+    RBrace,      // }
+    LBracket,    // [
+    RBracket,    // ]
+    Arrow,       // ->
+    FatArrow,    // =>
+    ColonColon,  // ::
 
     // operators
     Bang,         // !
@@ -108,6 +109,8 @@ inline const char* to_string(TokenKind kind) {
         return "Dot";
     case TokenKind::DotDot:
         return "DotDot";
+    case TokenKind::DotDotEqual:
+        return "DotDotEqual";
     case TokenKind::Ellipsis:
         return "Ellipsis";
     case TokenKind::LParen:

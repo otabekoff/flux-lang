@@ -254,6 +254,9 @@ std::vector<Token> Lexer::tokenize() {
                 if (peek() == '.') {
                     advance();
                     tokens.push_back({TokenKind::Ellipsis, "...", line_, column_ - 3});
+                } else if (peek() == '=') {
+                    advance();
+                    tokens.push_back({TokenKind::DotDotEqual, "..=", line_, column_ - 3});
                 } else {
                     tokens.push_back({TokenKind::DotDot, "..", line_, column_ - 2});
                 }

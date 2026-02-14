@@ -467,6 +467,69 @@ struct VariantPattern : Pattern {
     }
 };
 
+struct TuplePattern : Pattern {
+    std::vector<PatternPtr> elements;
+    TuplePattern(std::vector<PatternPtr> elems) : elements(std::move(elems)) {}
+    std::unique_ptr<Node> clone() const override {
+        std::vector<PatternPtr> new_elems;
+        new_elems.reserve(elements.size());
+        for (const auto& e : elements)
+            new_elems.push_back(
+                std::unique_ptr<Pattern>(static_cast<Pattern*>(e->clone().release())));
+        return std::make_unique<TuplePattern>(std::move(new_elems));
+    }
+};
+
+struct FieldPattern {
+    std::string field_name;
+    PatternPtr pattern;
+};
+
+struct StructPattern : Pattern {
+    std::string struct_name;
+    std::vector<FieldPattern> fields;
+
+    StructPattern(std::string name, std::vector<FieldPattern> fds)
+        : struct_name(std::move(name)), fields(std::move(fds)) {}
+    std::unique_ptr<Node> clone() const override {
+        std::vector<FieldPattern> new_fields;
+        new_fields.reserve(fields.size());
+        for (const auto& f : fields) {
+            new_fields.push_back({f.field_name, std::unique_ptr<Pattern>(static_cast<Pattern*>(
+                                                    f.pattern->clone().release()))});
+        }
+        return std::make_unique<StructPattern>(struct_name, std::move(new_fields));
+    }
+};
+
+struct RangePattern : Pattern {
+    ExprPtr start;
+    ExprPtr end;
+    bool is_inclusive;
+
+    RangePattern(ExprPtr s, ExprPtr e, bool inc)
+        : start(std::move(s)), end(std::move(e)), is_inclusive(inc) {}
+    std::unique_ptr<Node> clone() const override {
+        return std::make_unique<RangePattern>(
+            std::unique_ptr<Expr>(static_cast<Expr*>(start->clone().release())),
+            std::unique_ptr<Expr>(static_cast<Expr*>(end->clone().release())), is_inclusive);
+    }
+};
+
+struct OrPattern : Pattern {
+    std::vector<PatternPtr> alternatives;
+
+    OrPattern(std::vector<PatternPtr> alts) : alternatives(std::move(alts)) {}
+    std::unique_ptr<Node> clone() const override {
+        std::vector<PatternPtr> new_alts;
+        new_alts.reserve(alternatives.size());
+        for (const auto& a : alternatives)
+            new_alts.push_back(
+                std::unique_ptr<Pattern>(static_cast<Pattern*>(a->clone().release())));
+        return std::make_unique<OrPattern>(std::move(new_alts));
+    }
+};
+
 struct MatchArm {
     PatternPtr pattern;
     ExprPtr guard; // optional match guard (if condition)

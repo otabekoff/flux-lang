@@ -7,6 +7,7 @@
 #include "lexer/diagnostic.h"
 #include "type.h"
 
+#include <map>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -389,10 +390,39 @@ FluxType Resolver::type_from_name_internal(const std::string& name,
 
                 return FluxType(TypeKind::Function, name, false, std::move(params),
                                 std::make_unique<FluxType>(std::move(ret_type)));
+            } else {
+                // Pure tuple type: (T1, T2, ...)
+                std::string content = name.substr(1, args_end - 1);
+                std::vector<FluxType> elements;
+                if (!content.empty()) {
+                    int d = 0;
+                    size_t s = 0;
+                    for (size_t i = 0; i <= content.size(); ++i) {
+                        bool is_end = (i == content.size());
+                        if (!is_end) {
+                            if (content[i] == '(' || content[i] == '<')
+                                d++;
+                            else if (content[i] == ')' || content[i] == '>')
+                                d--;
+                        }
+                        if (is_end || (content[i] == ',' && d == 0)) {
+                            std::string element_str = content.substr(s, i - s);
+                            // trim
+                            size_t f = element_str.find_first_not_of(" \t\n");
+                            if (f != std::string::npos) {
+                                size_t l = element_str.find_last_not_of(" \t\n");
+                                element_str = element_str.substr(f, l - f + 1);
+                                elements.push_back(type_from_name_internal(element_str, seen));
+                            }
+                            s = i + 1;
+                        }
+                    }
+                }
+                FluxType res(TypeKind::Tuple, name);
+                res.generic_args = std::move(elements);
+                return res;
             }
         }
-
-        return {TypeKind::Tuple, name};
     }
 
     return unknown();
@@ -537,19 +567,21 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
         std::string name = "(";
         bool first = true;
         bool any_never = false;
+        std::vector<FluxType> elems;
         for (const auto& elem : tuple->elements) {
             FluxType t = type_of(*elem);
+            elems.push_back(t);
             if (t.kind == TypeKind::Never)
                 any_never = true;
             if (!first)
-                name += ",";
+                name += ", ";
             name += t.name;
             first = false;
         }
         if (any_never)
             return never_type();
         name += ")";
-        return {TypeKind::Tuple, name};
+        return FluxType(TypeKind::Tuple, name, false, {}, nullptr, std::move(elems));
     }
 
     if (auto lambda = dynamic_cast<const ast::LambdaExpr*>(&expr)) {
@@ -2060,23 +2092,53 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
 
         // 3. Enforce compatibility
         if (!are_types_compatible(declared_type, init_type)) {
-            throw DiagnosticError("cannot initialize variable '" + let_stmt->name + "' of type '" +
+            std::string var_name = let_stmt->name.empty() ? "(tuple)" : let_stmt->name;
+            throw DiagnosticError("cannot initialize variable '" + var_name + "' of type '" +
                                       declared_type.name + "' with value of type '" +
                                       init_type.name + "'",
                                   0, 0);
         }
 
-        // 4. Declare symbol
-        if (!current_scope_->declare({let_stmt->name,
-                                      SymbolKind::Variable,
-                                      let_stmt->is_mutable,
-                                      let_stmt->is_const,
-                                      false, // is_moved
-                                      ast::Visibility::None,
-                                      "",
-                                      let_stmt->type_name,
-                                      {}})) {
-            throw DiagnosticError("duplicate variable '" + let_stmt->name + "'", 0, 0);
+        // 4. Declare symbol(s)
+        if (!let_stmt->tuple_names.empty()) {
+            if (init_type.kind != TypeKind::Tuple) {
+                throw DiagnosticError("expected tuple type for destructuring let, found '" +
+                                          init_type.name + "'",
+                                      0, 0);
+            }
+            if (let_stmt->tuple_names.size() != init_type.generic_args.size()) {
+                throw DiagnosticError("destructuring pattern arity mismatch: expected " +
+                                          std::to_string(init_type.generic_args.size()) +
+                                          " variables, found " +
+                                          std::to_string(let_stmt->tuple_names.size()),
+                                      0, 0);
+            }
+            for (size_t i = 0; i < let_stmt->tuple_names.size(); ++i) {
+                if (!current_scope_->declare({let_stmt->tuple_names[i],
+                                              SymbolKind::Variable,
+                                              let_stmt->is_mutable,
+                                              let_stmt->is_const,
+                                              false, // is_moved
+                                              ast::Visibility::None,
+                                              "",
+                                              stringify_type(init_type.generic_args[i]),
+                                              {}})) {
+                    throw DiagnosticError("duplicate variable '" + let_stmt->tuple_names[i] + "'",
+                                          0, 0);
+                }
+            }
+        } else {
+            if (!current_scope_->declare({let_stmt->name,
+                                          SymbolKind::Variable,
+                                          let_stmt->is_mutable,
+                                          let_stmt->is_const,
+                                          false, // is_moved
+                                          ast::Visibility::None,
+                                          "",
+                                          let_stmt->type_name,
+                                          {}})) {
+                throw DiagnosticError("duplicate variable '" + let_stmt->name + "'", 0, 0);
+            }
         }
 
         // Implicit move for non-Copy types
@@ -2290,7 +2352,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
 
             // Resolve arm body in its own scope
             enter_scope();
-            resolve_pattern(*arm.pattern);
+            resolve_pattern(*arm.pattern, subject_type);
 
             // Resolve guard if present
             if (arm.guard) {
@@ -2529,7 +2591,7 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
     // literals (NumberExpr, StringExpr, BoolExpr, CharExpr) are fine
 }
 
-void Resolver::resolve_pattern(const ast::Pattern& pattern) {
+void Resolver::resolve_pattern(const ast::Pattern& pattern, const FluxType& subject_type) {
     if (const auto* id_pat = dynamic_cast<const ast::IdentifierPattern*>(&pattern)) {
         // Is this identifier an enum variant?
         if (is_enum_variant(id_pat->name)) {
@@ -2550,7 +2612,7 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern) {
                                       false, // is_moved
                                       ast::Visibility::None,
                                       "",
-                                      "Unknown",
+                                      stringify_type(subject_type),
                                       {}})) {
             throw DiagnosticError("duplicate variable '" + id_pat->name + "' in pattern", 0, 0);
         }
@@ -2558,29 +2620,206 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern) {
     }
 
     if (const auto* var_pat = dynamic_cast<const ast::VariantPattern*>(&pattern)) {
-        // Parse qualified name
-        std::string root = var_pat->variant_name;
-        if (const auto pos = root.find("::"); pos != std::string::npos) {
-            root = root.substr(0, pos);
-        }
-        if (!current_scope_->lookup(root) && !is_enum_variant(root)) {
-            if (root != "Some" && root != "Ok" && root != "Err") {
-                throw DiagnosticError(
-                    "use of undeclared identifier '" + root + "' in variant pattern", 0, 0);
+        // Resolve nested patterns for enums/Option/Result
+        if (subject_type.kind == TypeKind::Option) {
+            if (var_pat->variant_name == "Some" && !var_pat->sub_patterns.empty()) {
+                resolve_pattern(*var_pat->sub_patterns[0], subject_type.generic_args[0]);
+            }
+        } else if (subject_type.kind == TypeKind::Result) {
+            if (var_pat->variant_name == "Ok" && !var_pat->sub_patterns.empty()) {
+                resolve_pattern(*var_pat->sub_patterns[0], subject_type.generic_args[0]);
+            } else if (var_pat->variant_name == "Err" && !var_pat->sub_patterns.empty()) {
+                resolve_pattern(*var_pat->sub_patterns[0], subject_type.generic_args[1]);
+            }
+        } else if (subject_type.kind == TypeKind::Enum) {
+            // For general enums, we should verify it's a valid variant
+            // For now, assume variants have no members or use Unknown
+            for (const auto& sub : var_pat->sub_patterns) {
+                resolve_pattern(*sub, unknown());
             }
         }
-        for (const auto& sub : var_pat->sub_patterns) {
-            resolve_pattern(*sub);
+        return;
+    }
+
+    if (const auto* tup_pat = dynamic_cast<const ast::TuplePattern*>(&pattern)) {
+        if (subject_type.kind != TypeKind::Tuple) {
+            throw DiagnosticError(
+                "expected tuple type for tuple pattern, found '" + subject_type.name + "'", 0, 0);
+        }
+        if (tup_pat->elements.size() != subject_type.generic_args.size()) {
+            throw DiagnosticError("tuple pattern arity mismatch: expected " +
+                                      std::to_string(subject_type.generic_args.size()) +
+                                      ", found " + std::to_string(tup_pat->elements.size()),
+                                  0, 0);
+        }
+        for (size_t i = 0; i < tup_pat->elements.size(); ++i) {
+            resolve_pattern(*tup_pat->elements[i], subject_type.generic_args[i]);
+        }
+        return;
+    }
+
+    if (const auto* struct_pat = dynamic_cast<const ast::StructPattern*>(&pattern)) {
+        if (subject_type.kind != TypeKind::Struct) {
+            throw DiagnosticError(
+                "expected struct type for struct pattern, found '" + subject_type.name + "'", 0, 0);
+        }
+        if (!struct_fields_.contains(subject_type.name)) {
+            throw DiagnosticError("unknown struct '" + subject_type.name + "' in struct pattern", 0,
+                                  0);
+        }
+        const auto& fields = struct_fields_.at(subject_type.name);
+        for (const auto& fp : struct_pat->fields) {
+            bool found = false;
+            for (const auto& info : fields) {
+                if (fp.field_name == info.name) {
+                    resolve_pattern(*fp.pattern, type_from_name(info.type));
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                throw DiagnosticError("struct '" + subject_type.name + "' has no field named '" +
+                                          fp.field_name + "'",
+                                      0, 0);
+            }
         }
         return;
     }
 
     if (const auto* lit_pat = dynamic_cast<const ast::LiteralPattern*>(&pattern)) {
         resolve_expression(*lit_pat->literal);
+        FluxType lit_type = type_of(*lit_pat->literal);
+        if (!are_types_compatible(subject_type, lit_type)) {
+            throw DiagnosticError("literal pattern type '" + lit_type.name +
+                                      "' is incompatible with subject type '" + subject_type.name +
+                                      "'",
+                                  0, 0);
+        }
+        return;
+    }
+
+    if (const auto* or_pat = dynamic_cast<const ast::OrPattern*>(&pattern)) {
+        if (or_pat->alternatives.size() < 2) {
+            throw DiagnosticError("or-pattern must have at least two alternatives", 0, 0);
+        }
+
+        std::map<std::string, FluxType> expected_bindings;
+        bool first = true;
+
+        for (const auto& alt : or_pat->alternatives) {
+            enter_scope();
+            resolve_pattern(*alt, subject_type);
+
+            std::map<std::string, FluxType> current_bindings;
+            for (const auto& [name, sym] : current_scope_->get_symbols()) {
+                current_bindings[name] = type_from_name(sym.type);
+            }
+            exit_scope();
+
+            if (first) {
+                expected_bindings = std::move(current_bindings);
+                first = false;
+            } else {
+                if (current_bindings.size() != expected_bindings.size()) {
+                    throw DiagnosticError(
+                        "all alternatives in an or-pattern must bind the same variables", 0, 0);
+                }
+                for (const auto& [name, type] : expected_bindings) {
+                    if (current_bindings.find(name) == current_bindings.end()) {
+                        throw DiagnosticError(
+                            "variable '" + name +
+                                "' is not bound in all alternatives of or-pattern",
+                            0, 0);
+                    }
+                    if (!this->are_types_compatible(type, current_bindings.at(name))) {
+                        throw DiagnosticError(
+                            "variable '" + name +
+                                "' has inconsistent types across or-pattern alternatives",
+                            0, 0);
+                    }
+                }
+            }
+        }
+
+        for (const auto& [name, type] : expected_bindings) {
+            current_scope_->declare({name,
+                                     SymbolKind::Variable,
+                                     false,
+                                     true,
+                                     false,
+                                     ast::Visibility::None,
+                                     "",
+                                     stringify_type(type),
+                                     {}});
+        }
+        return;
+    }
+
+    if (const auto* range_pat = dynamic_cast<const ast::RangePattern*>(&pattern)) {
+        resolve_expression(*range_pat->start);
+        resolve_expression(*range_pat->end);
+        FluxType start_type = type_of(*range_pat->start);
+        FluxType end_type = type_of(*range_pat->end);
+
+        if (!this->are_types_compatible(start_type, end_type)) {
+            throw DiagnosticError("range pattern bounds must have compatible types", 0, 0);
+        }
+
+        if (!this->are_types_compatible(subject_type, start_type)) {
+            throw DiagnosticError("range pattern type mismatch: expected '" + subject_type.name +
+                                      "', found '" + start_type.name + "'",
+                                  0, 0);
+        }
+
+        if (start_type.kind != TypeKind::Int && start_type.kind != TypeKind::Float &&
+            start_type.kind != TypeKind::Char) {
+            throw DiagnosticError("range patterns are only supported for numeric and char types", 0,
+                                  0);
+        }
+
         return;
     }
 
     // WildcardPattern is fine
+}
+
+std::string Resolver::stringify_type(const FluxType& type) const {
+    if (type.kind == TypeKind::Ref) {
+        return (type.is_mut_ref ? "&mut " : "&") +
+               (type.generic_args.empty() ? type.name : stringify_type(type.generic_args[0]));
+    }
+    if (type.kind == TypeKind::Tuple) {
+        std::string res = "(";
+        for (size_t i = 0; i < type.generic_args.size(); ++i) {
+            if (i > 0)
+                res += ", ";
+            res += stringify_type(type.generic_args[i]);
+        }
+        res += ")";
+        return res;
+    }
+    if (type.kind == TypeKind::Function) {
+        std::string res = "(";
+        for (size_t i = 0; i < type.param_types.size(); ++i) {
+            if (i > 0)
+                res += ", ";
+            res += stringify_type(type.param_types[i]);
+        }
+        res += ") -> " + (type.return_type ? stringify_type(*type.return_type) : "Void");
+        return res;
+    }
+
+    std::string base = type.name;
+    if (!type.generic_args.empty()) {
+        base += "<";
+        for (size_t i = 0; i < type.generic_args.size(); ++i) {
+            if (i > 0)
+                base += ", ";
+            base += stringify_type(type.generic_args[i]);
+        }
+        base += ">";
+    }
+    return base;
 }
 
 bool Resolver::is_signed_int_name(const std::string& name) const {

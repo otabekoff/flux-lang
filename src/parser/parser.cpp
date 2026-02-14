@@ -881,9 +881,55 @@ ast::StmtPtr Parser::parse_match_statement() {
 }
 
 ast::PatternPtr Parser::parse_pattern() {
+    auto pat = parse_range_pattern();
+    if (peek().kind == TokenKind::Pipe) {
+        std::vector<ast::PatternPtr> alternatives;
+        alternatives.push_back(std::move(pat));
+        while (match(TokenKind::Pipe)) {
+            alternatives.push_back(parse_range_pattern());
+        }
+        return std::make_unique<ast::OrPattern>(std::move(alternatives));
+    }
+    return pat;
+}
+
+ast::PatternPtr Parser::parse_range_pattern() {
+    auto pat = parse_pattern_atom();
+    if (peek().kind == TokenKind::DotDot || peek().kind == TokenKind::DotDotEqual) {
+        bool inclusive = (advance().kind == TokenKind::DotDotEqual);
+        auto end = parse_pattern_atom();
+
+        auto* start_lit = dynamic_cast<ast::LiteralPattern*>(pat.get());
+        auto* end_lit = dynamic_cast<ast::LiteralPattern*>(end.get());
+
+        if (!start_lit || !end_lit) {
+            throw DiagnosticError("range pattern bounds must be literals", peek().line,
+                                  peek().column);
+        }
+
+        return std::make_unique<ast::RangePattern>(std::move(start_lit->literal),
+                                                   std::move(end_lit->literal), inclusive);
+    }
+    return pat;
+}
+
+ast::PatternPtr Parser::parse_pattern_atom() {
     const Token& tok = peek();
 
+    if (tok.kind == TokenKind::LParen) {
+        advance(); // (
+        std::vector<ast::PatternPtr> elements;
+        if (peek().kind != TokenKind::RParen) {
+            do {
+                elements.push_back(parse_pattern());
+            } while (match(TokenKind::Comma));
+        }
+        expect(TokenKind::RParen, "expected ')' after tuple pattern");
+        return std::make_unique<ast::TuplePattern>(std::move(elements));
+    }
+
     if (tok.kind == TokenKind::Number || tok.kind == TokenKind::String ||
+        tok.kind == TokenKind::Char ||
         (tok.kind == TokenKind::Keyword && (tok.lexeme == "true" || tok.lexeme == "false"))) {
         return std::make_unique<ast::LiteralPattern>(parse_primary());
     }
@@ -927,6 +973,20 @@ ast::PatternPtr Parser::parse_pattern() {
             }
             expect(TokenKind::RParen, "expected ')' after variant patterns");
             return std::make_unique<ast::VariantPattern>(name, std::move(sub_patterns));
+        }
+
+        if (peek().kind == TokenKind::LBrace) {
+            advance(); // {
+            std::vector<ast::FieldPattern> fields;
+            while (!match(TokenKind::RBrace)) {
+                const std::string field_name =
+                    expect(TokenKind::Identifier, "expected field name").lexeme;
+                expect(TokenKind::Colon, "expected ':' after field name");
+                ast::PatternPtr pat = parse_pattern();
+                fields.push_back({field_name, std::move(pat)});
+                match(TokenKind::Comma);
+            }
+            return std::make_unique<ast::StructPattern>(name, std::move(fields));
         }
 
         return std::make_unique<ast::IdentifierPattern>(name);

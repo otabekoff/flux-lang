@@ -64,6 +64,8 @@ class Parser {
     ast::StmtPtr parse_match_statement();
 
     ast::PatternPtr parse_pattern();
+    ast::PatternPtr parse_pattern_atom();
+    ast::PatternPtr parse_range_pattern();
 
     /* =======================
        Visibility helpers
