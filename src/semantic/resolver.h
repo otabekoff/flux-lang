@@ -53,6 +53,7 @@ struct Resolver {
   public:
     Resolver() = default;
     void resolve(const ast::Module& module);
+    void initialize_intrinsics();
 
   public:
     // Scope
@@ -102,6 +103,8 @@ struct Resolver {
         std::vector<std::string> param_types;
         std::string return_type;
         bool has_default = false;
+        ast::Visibility visibility = ast::Visibility::None;
+        std::string module_name;
     };
 
     static std::vector<TypeParamBound>
@@ -160,6 +163,7 @@ struct Resolver {
     };
 
     std::unordered_map<std::string, std::vector<FieldInfo>> struct_fields_;
+    std::unordered_map<std::string, std::vector<FieldInfo>> class_fields_;
     std::unordered_map<std::string, std::string> type_aliases_;
     std::unordered_map<std::string, std::vector<TraitMethodSig>> trait_methods_;
     std::unordered_map<std::string, std::unordered_set<std::string>> trait_impls_;

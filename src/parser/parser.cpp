@@ -1,5 +1,6 @@
-#include "parser.h"
+#include "parser/parser.h"
 #include "lexer/diagnostic.h"
+#include <map>
 
 namespace flux {
 /* =======================

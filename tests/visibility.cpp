@@ -1,146 +1,133 @@
-#include "ast/ast.h"
 #include "lexer/diagnostic.h"
-#include "lexer/token.h"
+#include "lexer/lexer.h"
+#include "parser/parser.h"
 #include "semantic/resolver.h"
 #include <cassert>
 #include <iostream>
+#include <string>
 
-using namespace flux::ast;
-using namespace flux::semantic;
+// A simple manual find to avoid header issues with strstr/find
+bool manual_contains(const char* haystack, const char* needle) {
+    if (!haystack || !needle)
+        return false;
+    if (needle[0] == '\0')
+        return true;
+    for (int i = 0; haystack[i] != '\0'; ++i) {
+        bool match = true;
+        for (int j = 0; needle[j] != '\0'; ++j) {
+            if (haystack[i + j] == '\0' || haystack[i + j] != needle[j]) {
+                match = false;
+                break;
+            }
+        }
+        if (match)
+            return true;
+    }
+    return false;
+}
+
+void expect_visibility_error(const std::string& code_a, const std::string& code_b,
+                             const std::string& test_name, const std::string& expected_error) {
+    try {
+        flux::Lexer lexer_a(code_a);
+        flux::Parser parser_a(lexer_a.tokenize());
+        auto module_a = parser_a.parse_module();
+
+        flux::Lexer lexer_b(code_b);
+        flux::Parser parser_b(lexer_b.tokenize());
+        auto module_b = parser_b.parse_module();
+
+        flux::semantic::Resolver resolver;
+        resolver.initialize_intrinsics();
+
+        // Resolve Module A (this populates global scope with A:: symbols)
+        resolver.resolve(module_a);
+
+        // Resolve Module B
+        resolver.resolve(module_b);
+
+        std::cerr << test_name << " failed: expected error '" << expected_error
+                  << "', but it passed.\n";
+        assert(false);
+    } catch (const flux::DiagnosticError& e) {
+        if (manual_contains(e.what(), expected_error.c_str())) {
+            std::cout << test_name << " passed (caught expected error: " << e.what() << ").\n";
+        } else {
+            std::cerr << test_name << " failed: caught error '" << e.what() << "', but expected '"
+                      << expected_error << "'.\n";
+            assert(false);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << test_name << " failed: caught unexpected exception: " << e.what() << "\n";
+        assert(false);
+    }
+}
+
+void run_visibility_test(const std::string& code_a, const std::string& code_b,
+                         const std::string& test_name) {
+    try {
+        flux::Lexer lexer_a(code_a);
+        flux::Parser parser_a(lexer_a.tokenize());
+        auto module_a = parser_a.parse_module();
+
+        flux::Lexer lexer_b(code_b);
+        flux::Parser parser_b(lexer_b.tokenize());
+        auto module_b = parser_b.parse_module();
+
+        flux::semantic::Resolver resolver;
+        resolver.initialize_intrinsics();
+
+        resolver.resolve(module_a);
+        resolver.resolve(module_b);
+
+        std::cout << test_name << " passed.\n";
+    } catch (const std::exception& e) {
+        std::cerr << test_name << " failed: " << e.what() << "\n";
+        assert(false);
+    }
+}
+
+void test_public_function_access() {
+    std::string mod_a = "module A; pub func hello() {}";
+    std::string mod_b = "module B; import A; func test() { A::hello(); }";
+    run_visibility_test(mod_a, mod_b, "test_public_function_access");
+}
+
+void test_private_function_access() {
+    std::string mod_a = "module A; func secret() {}";
+    std::string mod_b = "module B; import A; func test() { A::secret(); }";
+    // Since secret is in Module A, it is registered as A::secret in the global scope
+    // with visibility Private and module_name A.
+    expect_visibility_error(mod_a, mod_b, "test_private_function_access", "is private");
+}
 
 void test_public_field_access() {
-    // struct Data { pub x: Int32 }
-    StructDecl data_decl("Data", {}, {{"x", "Int32", Visibility::Public}});
-    data_decl.visibility = Visibility::Public;
-
-    Module mod;
-    mod.structs.push_back(std::move(data_decl));
-
-    // (Data { x: 1 }).x
-    std::vector<FieldInit> field_inits;
-    field_inits.push_back({"x", std::make_unique<NumberExpr>("1")});
-    auto lit = std::make_unique<StructLiteralExpr>("Data", std::move(field_inits));
-    auto access = std::make_unique<BinaryExpr>(flux::TokenKind::Dot, std::move(lit),
-                                               std::make_unique<IdentifierExpr>("x"));
-
-    Resolver resolver;
-    resolver.resolve(mod);
-    FluxType t = resolver.type_of(*access);
-    assert(t.kind == TypeKind::Int);
+    std::string mod_a = "module A; pub struct S { pub x: Int32 }";
+    std::string mod_b = "module B; import A; func test(s: A::S) { let v: Int32 = s.x; }";
+    run_visibility_test(mod_a, mod_b, "test_public_field_access");
 }
 
-void test_private_field_access_fail() {
-    // struct Data { x: Int32 } (private by default)
-    StructDecl data_decl("Data", {}, {{"x", "Int32", Visibility::None}});
-    data_decl.visibility = Visibility::Public;
-
-    Module mod;
-    mod.structs.push_back(std::move(data_decl));
-
-    // (Data { x: 1 }).x
-    std::vector<FieldInit> field_inits;
-    field_inits.push_back({"x", std::make_unique<NumberExpr>("1")});
-    auto lit = std::make_unique<StructLiteralExpr>("Data", std::move(field_inits));
-    auto access = std::make_unique<BinaryExpr>(flux::TokenKind::Dot, std::move(lit),
-                                               std::make_unique<IdentifierExpr>("x"));
-
-    Resolver resolver;
-    resolver.resolve(mod);
-
-    try {
-        resolver.type_of(*access);
-        assert(false && "Should have thrown for private field access");
-    } catch (const flux::DiagnosticError& e) {
-        std::cout << "Caught expected error: " << e.what() << std::endl;
-    }
+void test_private_field_access() {
+    std::string mod_a = "module A; pub struct S { x: Int32 }";
+    std::string mod_b = "module B; import A; func test(s: A::S) { let v: Int32 = s.x; }";
+    expect_visibility_error(mod_a, mod_b, "test_private_field_access", "field 'x' is private");
 }
 
-void test_private_field_access_pass_in_method() {
-    // struct Data { x: Int32 }
-    // impl Data { func get_x(self) -> Int32 { return self.x; } }
-
-    StructDecl data_decl("Data", {}, {{"x", "Int32", Visibility::None}});
-    data_decl.visibility = Visibility::Public;
-
-    // self.x
-    auto self_expr = std::make_unique<IdentifierExpr>("self");
-    auto access = std::make_unique<BinaryExpr>(flux::TokenKind::Dot, std::move(self_expr),
-                                               std::make_unique<IdentifierExpr>("x"));
-    auto ret_stmt = std::make_unique<ReturnStmt>(std::move(access));
-
-    std::vector<std::unique_ptr<Stmt>> body_stmts;
-    body_stmts.push_back(std::move(ret_stmt));
-    Block body;
-    body.statements = std::move(body_stmts);
-
-    FunctionDecl get_x_fn;
-    get_x_fn.name = "get_x";
-    get_x_fn.params.push_back({"self", "Data"});
-    get_x_fn.return_type = "Int32";
-    get_x_fn.body = std::move(body);
-    get_x_fn.has_body = true;
-    get_x_fn.visibility = Visibility::Public;
-
-    std::vector<FunctionDecl> methods;
-    methods.push_back(std::move(get_x_fn));
-
-    ImplBlock impl({}, "Data", std::move(methods));
-
-    Module mod;
-    mod.structs.push_back(std::move(data_decl));
-    mod.impls.push_back(std::move(impl));
-
-    Resolver resolver;
-    resolver.resolve(mod);
-    std::cout << "Private field access in method passed.\n";
-}
-
-void test_private_method_access_fail() {
-    // struct Data {}
-    // impl Data { private func secret(self) {} }
-
-    StructDecl data_decl("Data", {}, {});
-    data_decl.visibility = Visibility::Public;
-
-    FunctionDecl secret_fn;
-    secret_fn.name = "secret";
-    secret_fn.params.push_back({"self", "Data"});
-    secret_fn.visibility = Visibility::Private;
-    secret_fn.body = Block({});
-    secret_fn.has_body = true;
-
-    std::vector<FunctionDecl> methods;
-    methods.push_back(std::move(secret_fn));
-    ImplBlock impl({}, "Data", std::move(methods));
-
-    Module mod;
-    mod.structs.push_back(std::move(data_decl));
-    mod.impls.push_back(std::move(impl));
-
-    // (Data {}).secret()
-    ExprPtr lit = std::make_unique<StructLiteralExpr>("Data", std::vector<FieldInit>{});
-    ExprPtr dot = std::make_unique<BinaryExpr>(flux::TokenKind::Dot, std::move(lit),
-                                               std::make_unique<IdentifierExpr>("secret"));
-
-    std::vector<ExprPtr> call_args;
-    auto call = std::make_unique<CallExpr>(std::move(dot), std::move(call_args));
-
-    Resolver resolver;
-    resolver.resolve(mod);
-
-    try {
-        resolver.type_of(*call);
-        assert(false && "Should have thrown for private method access");
-    } catch (const flux::DiagnosticError& e) {
-        std::cout << "Caught expected error: " << e.what() << std::endl;
-    }
+void test_same_module_private_access() {
+    std::string mod_a = R"(
+        module A;
+        struct S { x: Int32 }
+        func test(s: S) { let v: Int32 = s.x; }
+    )";
+    run_visibility_test(mod_a, "", "test_same_module_private_access");
 }
 
 int main() {
+    test_public_function_access();
+    test_private_function_access();
     test_public_field_access();
-    test_private_field_access_fail();
-    test_private_field_access_pass_in_method();
-    test_private_method_access_fail();
+    test_private_field_access();
+    test_same_module_private_access();
     std::cout << "All visibility tests passed.\n";
     return 0;
 }

@@ -131,6 +131,10 @@ FluxType Resolver::type_from_name_internal(const std::string& name,
         return FluxType(TypeKind::Never, name);
     }
 
+    if (name == "Module") {
+        return FluxType(TypeKind::Unknown, "Module"); // or TypeKind::Module if we had it
+    }
+
     if (name == "Self" && !current_type_name_.empty()) {
         return type_from_name_internal(current_type_name_, seen);
     }
@@ -717,10 +721,36 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
                         "no variant '" + rhs_id->name + "' in enum '" + lhs_id->name + "'", 0, 0);
                 }
             }
-            // For module paths (e.g., io::println), just resolve left
-            if (lhs_id) {
-                const Symbol* sym = current_scope_->lookup(lhs_id->name);
-                if (sym) {
+            // For module paths (e.g., A::secret), resolve the full qualified name
+            if (lhs_id && rhs_id) {
+                std::string full_name = lhs_id->name + "::" + rhs_id->name;
+                if (const Symbol* sym = current_scope_->lookup(full_name)) {
+                    // Enforce visibility
+                    if (sym->visibility == ast::Visibility::Private ||
+                        sym->visibility == ast::Visibility::None) {
+                        if (!sym->module_name.empty() && sym->module_name != current_module_name_) {
+                            throw DiagnosticError("identifier '" + full_name + "' is private", 0,
+                                                  0);
+                        }
+                    }
+
+                    if (sym->kind == SymbolKind::Function) {
+                        std::vector<FluxType> params;
+                        for (const auto& pt : sym->param_types) {
+                            params.push_back(type_from_name(pt));
+                        }
+                        FluxType ret_type = type_from_name(sym->type);
+                        std::string fn_signature = "(";
+                        for (size_t i = 0; i < params.size(); ++i) {
+                            if (i > 0)
+                                fn_signature += ", ";
+                            fn_signature += params[i].name;
+                        }
+                        fn_signature += ") -> " + ret_type.name;
+
+                        return FluxType(TypeKind::Function, fn_signature, false, std::move(params),
+                                        std::make_unique<FluxType>(std::move(ret_type)));
+                    }
                     return type_from_name(sym->type);
                 }
             }
@@ -752,8 +782,15 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
                             // Enforce visibility
                             if (p.visibility == ast::Visibility::Private ||
                                 p.visibility == ast::Visibility::None) {
-                                // Private fields are only accessible within the type's own methods
-                                if (current_type_name_ != base) {
+                                // Private fields are accessible within the type's own methods
+                                // OR within the same module where the struct is defined.
+                                bool same_type = (current_type_name_ == base);
+                                bool same_module = false;
+                                if (Symbol* struct_sym = current_scope_->lookup_mut(base)) {
+                                    same_module = (struct_sym->module_name == current_module_name_);
+                                }
+
+                                if (!same_type && !same_module) {
                                     throw DiagnosticError("field '" + field_name + "' is private",
                                                           0, 0);
                                 }
@@ -794,8 +831,10 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
                 if (const Symbol* sym = current_scope_->lookup(qualified_name)) {
                     if (sym->kind == SymbolKind::Function) {
                         // Enforce method visibility
-                        if (sym->visibility == ast::Visibility::Private) {
-                            if (current_type_name_ != base_type_name) {
+                        if (sym->visibility == ast::Visibility::Private ||
+                            sym->visibility == ast::Visibility::None) {
+                            if (current_type_name_ != base_type_name &&
+                                sym->module_name != current_module_name_) {
                                 throw DiagnosticError(
                                     "method '" + method_lookup_name + "' is private", 0, 0);
                             }
@@ -850,6 +889,13 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
                     std::string trait_qualified = tb_name + "::" + field_name;
                     if (const Symbol* sym = current_scope_->lookup(trait_qualified)) {
                         if (sym->kind == SymbolKind::Function) {
+                            if (sym->visibility == ast::Visibility::Private ||
+                                sym->visibility == ast::Visibility::None) {
+                                if (!sym->module_name.empty() &&
+                                    sym->module_name != current_module_name_) {
+                                    continue;
+                                }
+                            }
                             std::vector<FluxType> params;
                             for (size_t i = 1; i < sym->param_types.size(); ++i) {
                                 params.push_back(type_from_name(sym->param_types[i]));
@@ -874,6 +920,13 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
                     if (tm_it != trait_methods_.end()) {
                         for (const auto& sig : tm_it->second) {
                             if (sig.name == field_name) {
+                                if (sig.visibility == ast::Visibility::Private ||
+                                    sig.visibility == ast::Visibility::None) {
+                                    if (!sig.module_name.empty() &&
+                                        sig.module_name != current_module_name_) {
+                                        continue;
+                                    }
+                                }
                                 std::vector<FluxType> params;
                                 for (const auto& pt : sig.param_types) {
                                     params.push_back(type_from_name(pt));
@@ -1024,16 +1077,26 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
             if (bin->op == TokenKind::Dot || bin->op == TokenKind::ColonColon) {
 
                 try {
-                    FluxType lhs_type = type_of(*bin->left);
-                    std::string lhs_name = lhs_type.name;
-                    if (lhs_name.starts_with("&mut "))
-                        lhs_name = lhs_name.substr(5);
-                    else if (lhs_name.starts_with("&"))
-                        lhs_name = lhs_name.substr(1);
+                    std::string lhs_base;
+                    FluxType lhs_type;
 
-                    std::string lhs_base = lhs_name;
-                    if (auto pos = lhs_base.find('<'); pos != std::string::npos)
-                        lhs_base = lhs_base.substr(0, pos);
+                    if (bin->op == TokenKind::Dot) {
+                        lhs_type = type_of(*bin->left);
+                        lhs_base = lhs_type.name;
+                        if (lhs_base.starts_with("&mut "))
+                            lhs_base = lhs_base.substr(5);
+                        else if (lhs_base.starts_with("&"))
+                            lhs_base = lhs_base.substr(1);
+                        if (auto pos = lhs_base.find('<'); pos != std::string::npos)
+                            lhs_base = lhs_base.substr(0, pos);
+                    } else if (bin->op == TokenKind::ColonColon) {
+                        if (auto lid = dynamic_cast<const ast::IdentifierExpr*>(bin->left.get())) {
+                            lhs_base = lid->name;
+                        } else {
+                            lhs_type = type_of(*bin->left);
+                            lhs_base = lhs_type.name;
+                        }
+                    }
 
                     if (auto rhs_id = dynamic_cast<const ast::IdentifierExpr*>(bin->right.get())) {
                         std::string callee_name = rhs_id->name;
@@ -1492,6 +1555,8 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
     }
 
     return unknown();
+
+    // literals (NumberExpr, StringExpr, BoolExpr, CharExpr) are fine
 }
 
 /* =======================
@@ -1514,8 +1579,10 @@ void Resolver::exit_scope() {
    Entry point
    ======================= */
 
-void Resolver::resolve(const ast::Module& module) {
-    all_scopes_.clear();
+void Resolver::initialize_intrinsics() {
+    if (!all_scopes_.empty())
+        return;
+
     auto global_scope = std::make_unique<Scope>(nullptr);
     current_scope_ = global_scope.get();
     all_scopes_.push_back(std::move(global_scope));
@@ -1591,12 +1658,16 @@ void Resolver::resolve(const ast::Module& module) {
                              "",
                              "Result<T,E>",
                              {"E"}});
+}
 
-    enter_scope(); // Module scope - persists after resolve()
+void Resolver::resolve(const ast::Module& module) {
+    initialize_intrinsics();
+    enter_scope(); // Module scope
     resolve_module(module);
 
     // Monomorphization pass (Phase 2)
     monomorphize_recursive();
+    exit_scope();
 }
 
 /* =======================
@@ -1605,9 +1676,6 @@ void Resolver::resolve(const ast::Module& module) {
 
 void Resolver::resolve_module(const ast::Module& module) {
     current_module_name_ = module.name;
-    // Note: Caller (resolve()) handles entering the initial module scope.
-    // If we are resolving nested modules (imports), we might need more logic here.
-
     // Declare imports
     for (const auto& imp : module.imports) {
         std::string root_path = imp.module_path;
@@ -1625,6 +1693,8 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  "",
                                  "Module",
                                  {}});
+        std::cout << "Declared identifier: '" << root_path << "' in scope: " << current_scope_
+                  << std::endl;
     }
 
     // Declare type aliases
@@ -1637,7 +1707,7 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  false,
                                  true,
                                  ta.visibility,
-                                 "",
+                                 current_module_name_,
                                  "FluxType",
                                  {}});
     }
@@ -1656,9 +1726,28 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  false,
                                  true,
                                  s.visibility,
-                                 "",
+                                 current_module_name_,
                                  "FluxType",
                                  {}});
+        std::vector<FieldInfo> field_infos;
+        for (const auto& f : s.fields) {
+            field_infos.push_back({f.name, f.type, f.visibility});
+        }
+        struct_fields_[s.name] = field_infos;
+        if (!current_module_name_.empty()) {
+            struct_fields_[current_module_name_ + "::" + s.name] = field_infos;
+            all_scopes_[0]->declare({current_module_name_ + "::" + s.name,
+                                     SymbolKind::Variable,
+                                     false,
+                                     true,
+                                     false,
+                                     true,
+                                     s.visibility,
+                                     current_module_name_,
+                                     "FluxType",
+                                     {}});
+        }
+
         // Store struct fields for type checking
         std::vector<FieldInfo> fields;
         for (const auto& f : s.fields) {
@@ -1689,9 +1778,28 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  false,
                                  true,
                                  c.visibility,
-                                 "",
+                                 current_module_name_,
                                  "FluxType",
                                  {}});
+        std::vector<FieldInfo> field_infos;
+        for (const auto& f : c.fields) {
+            field_infos.push_back({f.name, f.type, f.visibility});
+        }
+        class_fields_[c.name] = field_infos;
+        if (!current_module_name_.empty()) {
+            class_fields_[current_module_name_ + "::" + c.name] = field_infos;
+            all_scopes_[0]->declare({current_module_name_ + "::" + c.name,
+                                     SymbolKind::Variable,
+                                     false,
+                                     true,
+                                     false,
+                                     true,
+                                     c.visibility,
+                                     current_module_name_,
+                                     "FluxType",
+                                     {}});
+        }
+
         std::vector<FieldInfo> fields;
         for (const auto& f : c.fields) {
             fields.push_back({f.name, f.type, f.visibility});
@@ -1721,9 +1829,22 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  false,
                                  true,
                                  e.visibility,
-                                 "",
+                                 current_module_name_,
                                  "FluxType",
                                  {}});
+        if (!current_module_name_.empty()) {
+            all_scopes_[0]->declare({current_module_name_ + "::" + e.name,
+                                     SymbolKind::Variable,
+                                     false,
+                                     true,
+                                     false,
+                                     true,
+                                     e.visibility,
+                                     current_module_name_,
+                                     "FluxType",
+                                     {}});
+        }
+
         std::vector<std::string> vars;
         vars.reserve(e.variants.size());
         for (const auto& [name, types] : e.variants) {
@@ -1754,9 +1875,22 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  false,
                                  true,
                                  t.visibility,
-                                 "",
+                                 current_module_name_,
                                  "Trait",
                                  {}});
+        if (!current_module_name_.empty()) {
+            all_scopes_[0]->declare({current_module_name_ + "::" + t.name,
+                                     SymbolKind::Variable,
+                                     false,
+                                     true,
+                                     false,
+                                     true,
+                                     t.visibility,
+                                     current_module_name_,
+                                     "Trait",
+                                     {}});
+        }
+
         auto bounds = parse_where_clause(t.where_clause);
         std::vector<std::string> combined = t.type_params;
         for (const auto& b : bounds) {
@@ -1791,6 +1925,8 @@ void Resolver::resolve_module(const ast::Module& module) {
                 }
             }
             sig.has_default = m.has_body;
+            sig.visibility = m.visibility;
+            sig.module_name = current_module_name_;
             sigs.push_back(std::move(sig));
         }
         trait_methods_[t.name] = std::move(sigs);
@@ -1822,11 +1958,21 @@ void Resolver::resolve_module(const ast::Module& module) {
         sym.kind = SymbolKind::Function;
         sym.type = fn.return_type;
         sym.param_types = std::move(params);
-        sym.is_moved = false; // Added
+        sym.is_moved = false;
+        sym.visibility = fn.visibility;
+        sym.module_name = current_module_name_;
+        sym.is_initialized = true;
 
         if (!current_scope_->declare(sym)) {
             throw DiagnosticError("duplicate function '" + fn.name + "'", 0, 0);
         }
+
+        if (!current_module_name_.empty()) {
+            Symbol qualified = sym;
+            qualified.name = current_module_name_ + "::" + fn.name;
+            all_scopes_[0]->declare(qualified);
+        }
+
         function_decls_[fn.name] = &fn;
     }
 
@@ -2512,6 +2658,17 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
         if (!sym) {
             throw DiagnosticError("use of undeclared identifier '" + id->name + "'", 0, 0);
         }
+
+        // Enforce visibility
+        if (sym->visibility == ast::Visibility::Private ||
+            sym->visibility == ast::Visibility::None) {
+            if (!sym->module_name.empty() && sym->module_name != current_module_name_) {
+                throw DiagnosticError("identifier '" + id->name + "' is private to module '" +
+                                          sym->module_name + "'",
+                                      0, 0);
+            }
+        }
+
         if (sym->kind == SymbolKind::Variable) {
             if (!sym->is_initialized) {
                 throw DiagnosticError("use of uninitialized variable '" + id->name + "'", 0, 0);
@@ -2576,7 +2733,12 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
     }
 
     if (const auto* bin = dynamic_cast<const ast::BinaryExpr*>(&expr)) {
-        if (bin->op == TokenKind::ColonColon || bin->op == TokenKind::Dot) {
+        if (bin->op == TokenKind::ColonColon) {
+            // Use type_of to validate and enforce visibility for qualified names
+            (void)type_of(expr);
+            return;
+        }
+        if (bin->op == TokenKind::Dot) {
             resolve_expression(*bin->left);
             return;
         }

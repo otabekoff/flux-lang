@@ -33,7 +33,7 @@ The Flux compiler frontend is largely complete at the **syntax** level. The lexe
 
 Complete the resolver so that every language feature described in the spec is fully validated before code generation begins.
 
-### 1.1 Type System
+### 1.1 Type System [COMPLETED]
 
 - [x] **Type inference for `let` bindings** — Not supported by design. Flux requires explicit type annotations for all let bindings.
 - [x] **Full numeric type hierarchy (complete)** — All widening/narrowing rules between Int8–Int128, UInt8–UInt128, Float32/64/128, and pointer types are enforced. Helpers and exhaustive tests for all widths and promotion rules are implemented and pass in both Debug and Release. Strict policy review for implicit int→float promotion is complete. See `numeric_promotion.cpp` for test coverage.
@@ -46,7 +46,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **`Never` type propagation** — `panic()` and infinite loops produce `Never`; allow `Never` to coerce to any type. Unreachable code after diverging expressions is detected.
 - [x] **Type alias resolution** — fully resolve chains: `type A = B; type B = Int32;` → `A` is `Int32`. Implemented with recursive resolution and cycle detection.
 
-### 1.2 Generics & Trait Bounds
+### 1.2 Generics & Trait Bounds [COMPLETED]
 
 - [x] **Trait bound enforcement** — when a function declares `func foo<T: Display>(x: T)`, verify that the argument type implements `Display`. Supports single and multi-bounds (`T: Display + Clone`). Tested in `trait_bound.cpp`.
 - [x] 1.2 Implement **where clause validation** (generic function/struct definitions) like `where T: Ord + Clone`.
@@ -54,7 +54,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Associated types** — `trait Iterator { type Item; }` and resolution in impl blocks.
 - [x] **Generic method resolution** — resolve calls like `Box<Int32>::new(42)` to the correct monomorphized impl method. (Handled via monomorphization tracking in `CallExpr`)
 
-### 1.3 Traits & Impls
+### 1.3 Traits & Impls [COMPLETED]
 
 - [x] **Trait conformance checking** — verify every `impl Display for Point` provides all required methods with correct signatures. (Tested in `trait_conformance.cpp`)
 - [x] **Default method bodies** — allow traits to have default implementations. (Tested in `trait_default_methods.cpp`)
@@ -70,7 +70,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [ ] **Drop semantics** — insert implicit `drop()` at scope exit; validate manual `drop()` calls.
 - [x] **Copy vs Move distinction** — primitive types (Int, Float, Bool, Char) are Copy; structs/enums are Move by default unless annotated. (Implemented in Phase 1.4)
 
-### 1.5 Pattern Matching
+### 1.5 Pattern Matching [COMPLETED]
 
 - [x] **Tuple destructuring type checking** — validate types in `let (x, y) = expr;`.
 - [x] **Struct pattern type checking** — validate `Point { x, y }` pattern field types.
@@ -79,7 +79,7 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Guard type checking** — match guards `if condition` must be `Bool`.
 - [x] **Or-patterns** — `Red | Blue => { ... }` combining multiple patterns in one arm.
 
-### 1.6 Control Flow Analysis
+### 1.6 Control Flow Analysis [COMPLETED]
 
 - [x] **Definite assignment analysis** — error on reading a variable before it's assigned.
 - [x] **Unreachable code detection** — warn (error in Flux) on code after `return`, `break`, `continue`, `panic()`.
@@ -91,10 +91,10 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **`?` operator type checking** — the operand must be `Result<T, E>` or `Option<T>`; the enclosing function must return a compatible error type.
 - [x] **Error propagation chain validation** — propagated error types must match or be convertible to the function's return error type.
 
-### 1.8 Visibility Enforcement
+### 1.8 Visibility Enforcement [COMPLETED]
 
 - [x] **`pub` / `private` access checking** — private struct fields and functions not accessible outside their module. (Default-private behavior enforced)
-- [ ] **Module-level visibility** — enforce visibility across module boundaries once module resolution is implemented.
+- [x] **Module-level visibility** — enforce visibility across module boundaries once module resolution is implemented.
 
 ### 1.9 Concurrency Semantics
 
@@ -310,7 +310,7 @@ Implement the core types and functions referenced in the language spec.
 | 4   | No type inference — `let x = 42;` requires explicit `: Int32`                                | `resolver.cpp`                 | Open   |
 | 5   | `where` clauses are parsed but not enforced                                                  | `resolver.cpp`                 | Open   |
 | 6   | Trait conformance is not checked — `impl Display for Point` methods aren't validated         | `resolver.cpp`                 | Open   |
-| 7   | `pub`/`private` visibility parsed but not enforced                                           | `resolver.cpp`                 | Open   |
+| 7   | `pub`/`private` visibility parsed but not enforced                                           | `resolver.cpp`                 | Fixed  |
 | 8   | `?` error propagation parsed but not semantically checked                                    | `resolver.cpp`                 | Open   |
 | 9   | `unsafe` keyword recognized but not semantically modeled                                     | `resolver.cpp`                 | Open   |
 | 10  | `await` allowed outside `async` functions                                                    | `resolver.cpp`                 | Open   |
