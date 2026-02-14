@@ -90,6 +90,7 @@ add_flux_test(visibility)
 add_flux_test(orphan_rule)
 add_flux_test(pattern_matching)
 add_flux_test(control_flow)
+add_flux_test(error_handling)
 
 
 # By this what we've earned?

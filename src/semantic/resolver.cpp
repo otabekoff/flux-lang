@@ -1470,7 +1470,13 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
     }
 
     if (auto ep = dynamic_cast<const ast::ErrorPropagationExpr*>(&expr)) {
-        return type_of(*ep->operand);
+        FluxType op_type = type_of(*ep->operand);
+        if (op_type.kind == TypeKind::Option || op_type.kind == TypeKind::Result) {
+            if (!op_type.generic_args.empty()) {
+                return op_type.generic_args[0];
+            }
+        }
+        return op_type;
     }
 
     if (dynamic_cast<const ast::AwaitExpr*>(&expr)) {
@@ -2140,11 +2146,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     if (const auto* ret = dynamic_cast<const ast::ReturnStmt*>(&stmt)) {
         if (ret->expression) {
             FluxType returned = type_of(*ret->expression);
-            if (returned != current_function_return_type_ &&
-                current_function_return_type_.kind != TypeKind::Unknown &&
-                returned.kind != TypeKind::Unknown &&
-                !has_generic_param(current_function_return_type_.name) &&
-                !has_generic_param(returned.name)) {
+            if (!are_types_compatible(current_function_return_type_, returned)) {
                 throw DiagnosticError("return type mismatch: expected '" +
                                           current_function_return_type_.name + "', got '" +
                                           returned.name + "'",
@@ -2644,6 +2646,41 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
 
     if (const auto* ep = dynamic_cast<const ast::ErrorPropagationExpr*>(&expr)) {
         resolve_expression(*ep->operand);
+        FluxType op_type = type_of(*ep->operand);
+
+        if (op_type.kind != TypeKind::Option && op_type.kind != TypeKind::Result) {
+            throw DiagnosticError(
+                "the '?' operator can only be used on Option or Result types, found '" +
+                    op_type.name + "'",
+                0, 0);
+        }
+
+        // Validate compatibility with function return type
+        if (current_function_return_type_.kind == TypeKind::Option) {
+            if (op_type.kind != TypeKind::Option) {
+                throw DiagnosticError("cannot propagate Result error in function returning Option",
+                                      0, 0);
+            }
+        } else if (current_function_return_type_.kind == TypeKind::Result) {
+            if (op_type.kind != TypeKind::Result) {
+                throw DiagnosticError("cannot propagate Option None in function returning Result",
+                                      0, 0);
+            }
+            // Check error type compatibility
+            if (current_function_return_type_.generic_args.size() >= 2 &&
+                op_type.generic_args.size() >= 2) {
+                if (current_function_return_type_.generic_args[1] != op_type.generic_args[1]) {
+                    throw DiagnosticError("propagated error type '" + op_type.generic_args[1].name +
+                                              "' does not match function return error type '" +
+                                              current_function_return_type_.generic_args[1].name +
+                                              "'",
+                                          0, 0);
+                }
+            }
+        } else {
+            throw DiagnosticError(
+                "the '?' operator can only be used in functions returning Option or Result", 0, 0);
+        }
         return;
     }
 

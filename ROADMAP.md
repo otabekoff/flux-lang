@@ -86,10 +86,10 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Loop break-value analysis** — `break value` in `loop` for expression-valued loops.
 - [x] **For-loop iterator type propagation** — infer the loop variable type from the iterable.
 
-### 1.7 Error Handling
+### 1.7 Error Handling [COMPLETED]
 
-- [ ] **`?` operator type checking** — the operand must be `Result<T, E>` or `Option<T>`; the enclosing function must return a compatible error type.
-- [ ] **Error propagation chain validation** — propagated error types must match or be convertible to the function's return error type.
+- [x] **`?` operator type checking** — the operand must be `Result<T, E>` or `Option<T>`; the enclosing function must return a compatible error type.
+- [x] **Error propagation chain validation** — propagated error types must match or be convertible to the function's return error type.
 
 ### 1.8 Visibility Enforcement
 
