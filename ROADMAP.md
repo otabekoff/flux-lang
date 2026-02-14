@@ -74,7 +74,7 @@ Complete the resolver so that every language feature described in the spec is fu
 
 - [x] **Tuple destructuring type checking** — validate types in `let (x, y) = expr;`.
 - [x] **Struct pattern type checking** — validate `Point { x, y }` pattern field types.
-- [ ] **Nested pattern exhaustiveness** — check exhaustiveness for `Some(Some(x))` and similar nested patterns.
+- [x] **Nested pattern exhaustiveness** — check exhaustiveness for `Some(Some(x))` and similar nested patterns.
 - [x] **Range pattern validation** — `1..10` patterns: validate bounds are of the same type.
 - [x] **Guard type checking** — match guards `if condition` must be `Bool`.
 - [x] **Or-patterns** — `Red | Blue => { ... }` combining multiple patterns in one arm.

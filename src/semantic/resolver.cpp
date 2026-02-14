@@ -2361,55 +2361,22 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
 
             bool arm_returns = resolve_statement(*arm.body);
             exit_scope();
-
             all_arms_return = all_arms_return && arm_returns;
         }
 
         // Exhaustiveness rules
-        if (!has_wildcard) {
-            if (subject_type.kind == TypeKind::Bool) {
-                if (!(seen_true && seen_false)) {
-                    throw DiagnosticError("non-exhaustive match on Bool", 0, 0);
-                }
-            } else if (subject_type.kind == TypeKind::Enum) {
-                const auto& variants = enum_variants_.at(subject_type.name);
-
-                size_t covered = 0;
-                for (const auto& v : variants) {
-                    std::string qualified;
-                    qualified.reserve(subject_type.name.size() + v.size() + 2);
-                    qualified.append(subject_type.name).append("::").append(v);
-
-                    if (seen_enum_variants.contains(v) || seen_enum_variants.contains(qualified)) {
-                        covered++;
-                    }
-                }
-
-                if (covered != variants.size()) {
-                    throw DiagnosticError(
-                        "non-exhaustive match on enum '" + subject_type.name + "'", 0, 0);
-                }
-            } else if (subject_type.kind == TypeKind::Option) {
-                // Expect Some and None
-                bool has_some = seen_enum_variants.contains("Some");
-                bool has_none = seen_enum_variants.contains("None");
-                if (!has_some || !has_none) {
-                    throw DiagnosticError("non-exhaustive match on Option (missing Some or None)",
-                                          0, 0);
-                }
-            } else if (subject_type.kind == TypeKind::Result) {
-                // Expect Ok and Err
-                bool has_ok = seen_enum_variants.contains("Ok");
-                bool has_err = seen_enum_variants.contains("Err");
-                if (!has_ok || !has_err) {
-                    throw DiagnosticError("non-exhaustive match on Result (missing Ok or Err)", 0,
-                                          0);
-                }
-            } else {
-                throw DiagnosticError("non-exhaustive match (add '_' wildcard arm)", 0, 0);
+        std::vector<const ast::Pattern*> patterns_to_check;
+        for (const auto& arm : ms->arms) {
+            if (!arm.guard) {
+                patterns_to_check.push_back(arm.pattern.get());
             }
         }
 
+        if (!is_pattern_exhaustive(subject_type, patterns_to_check)) {
+            throw DiagnosticError("non-exhaustive match on '" + subject_type.name +
+                                      "' (missing cases or add '_' wildcard)",
+                                  0, 0);
+        }
         return all_arms_return;
     }
 
@@ -2820,6 +2787,127 @@ std::string Resolver::stringify_type(const FluxType& type) const {
         base += ">";
     }
     return base;
+}
+
+bool Resolver::is_pattern_exhaustive(const FluxType& type,
+                                     const std::vector<const ast::Pattern*>& patterns) const {
+    if (patterns.empty())
+        return false;
+
+    // 1. Check for catch-all patterns
+    for (const auto* pat : patterns) {
+        if (dynamic_cast<const ast::WildcardPattern*>(pat))
+            return true;
+        if (const auto* id_pat = dynamic_cast<const ast::IdentifierPattern*>(pat)) {
+            if (!is_enum_variant(id_pat->name) && id_pat->name != "None" &&
+                id_pat->name != "Some" && id_pat->name != "Ok" && id_pat->name != "Err") {
+                return true;
+            }
+        }
+    }
+
+    // 2. Handle specific types
+    if (type.kind == TypeKind::Bool) {
+        bool true_covered = false;
+        bool false_covered = false;
+        for (const auto* pat : patterns) {
+            if (const auto* lit = dynamic_cast<const ast::LiteralPattern*>(pat)) {
+                if (const auto* b = dynamic_cast<const ast::BoolExpr*>(lit->literal.get())) {
+                    if (b->value)
+                        true_covered = true;
+                    else
+                        false_covered = true;
+                }
+            } else if (const auto* or_pat = dynamic_cast<const ast::OrPattern*>(pat)) {
+                std::vector<const ast::Pattern*> alts;
+                for (const auto& a : or_pat->alternatives)
+                    alts.push_back(a.get());
+                if (is_pattern_exhaustive(type, alts))
+                    return true;
+            }
+        }
+        return true_covered && false_covered;
+    }
+
+    if (type.kind == TypeKind::Enum || type.kind == TypeKind::Option ||
+        type.kind == TypeKind::Result) {
+        std::vector<std::string> variants;
+        if (type.kind == TypeKind::Option) {
+            variants = {"Some", "None"};
+        } else if (type.kind == TypeKind::Result) {
+            variants = {"Ok", "Err"};
+        } else {
+            if (enum_variants_.find(type.name) == enum_variants_.end())
+                return false;
+            variants = enum_variants_.at(type.name);
+        }
+
+        for (const auto& variant : variants) {
+            std::vector<const ast::Pattern*> sub_patterns;
+            FluxType member_type = unknown_type();
+
+            if (type.kind == TypeKind::Option && variant == "Some") {
+                member_type = type.generic_args[0];
+            } else if (type.kind == TypeKind::Result) {
+                if (variant == "Ok")
+                    member_type = type.generic_args[0];
+                else if (variant == "Err")
+                    member_type = type.generic_args[1];
+            }
+
+            bool variant_fully_covered = false;
+            for (const auto* pat : patterns) {
+                if (const auto* var_pat = dynamic_cast<const ast::VariantPattern*>(pat)) {
+                    if (var_pat->variant_name == variant ||
+                        var_pat->variant_name == type.name + "::" + variant) {
+                        if (var_pat->sub_patterns.empty()) {
+                            variant_fully_covered = true;
+                            break;
+                        }
+                        for (const auto& sp : var_pat->sub_patterns)
+                            sub_patterns.push_back(sp.get());
+                    }
+                } else if (const auto* id_pat = dynamic_cast<const ast::IdentifierPattern*>(pat)) {
+                    if (id_pat->name == variant || id_pat->name == type.name + "::" + variant) {
+                        variant_fully_covered = true;
+                        break;
+                    }
+                } else if (const auto* or_pat = dynamic_cast<const ast::OrPattern*>(pat)) {
+                    // This is a bit simplified, but handle top-level Or in enums
+                    for (const auto& alt : or_pat->alternatives) {
+                        if (const auto* sub_var =
+                                dynamic_cast<const ast::VariantPattern*>(alt.get())) {
+                            if (sub_var->variant_name == variant ||
+                                sub_var->variant_name == type.name + "::" + variant) {
+                                if (sub_var->sub_patterns.empty()) {
+                                    variant_fully_covered = true;
+                                    break;
+                                }
+                                for (const auto& sp : sub_var->sub_patterns)
+                                    sub_patterns.push_back(sp.get());
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (variant_fully_covered)
+                continue;
+
+            if (sub_patterns.empty())
+                return false;
+
+            if (member_type.kind != TypeKind::Unknown) {
+                if (!is_pattern_exhaustive(member_type, sub_patterns))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    // Tuples and Structs are considered non-exhaustive without a wildcard for now
+    // unless we implement the full matrix algorithm.
+    return false;
 }
 
 bool Resolver::is_signed_int_name(const std::string& name) const {

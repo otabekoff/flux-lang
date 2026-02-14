@@ -66,6 +66,8 @@ struct Resolver {
     bool resolve_statement(const ast::Stmt& stmt);
     void resolve_pattern(const ast::Pattern& pattern, const FluxType& subject_type);
     void resolve_expression(const ast::Expr& expr);
+    bool is_pattern_exhaustive(const FluxType& type,
+                               const std::vector<const ast::Pattern*>& patterns) const;
 
     // Monomorphization accessors
     const std::vector<FunctionInstantiation>& function_instantiations() const {
