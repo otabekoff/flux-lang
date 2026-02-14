@@ -16,6 +16,7 @@ struct Symbol {
     SymbolKind kind;
     bool is_mutable = false;
     bool is_const = false;
+    bool is_moved = false;
     ast::Visibility visibility = ast::Visibility::None;
     std::string module_name;
 

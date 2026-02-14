@@ -1,5 +1,6 @@
 #include "resolver.h"
 
+#include <iostream>
 #include <ranges>
 
 #include "ast/ast.h"
@@ -1445,12 +1446,20 @@ void Resolver::resolve(const ast::Module& module) {
     all_scopes_.push_back(std::move(global_scope));
 
     // Built-ins
-    current_scope_->declare(
-        {"drop", SymbolKind::Function, false, true, ast::Visibility::Public, "", "Void", {"T"}});
+    current_scope_->declare({"drop",
+                             SymbolKind::Function,
+                             false,
+                             true,
+                             false,
+                             ast::Visibility::Public,
+                             "",
+                             "Void",
+                             {"T"}});
     current_scope_->declare({"panic",
                              SymbolKind::Function,
                              false,
                              true,
+                             false,
                              ast::Visibility::Public,
                              "",
                              "Never",
@@ -1459,24 +1468,34 @@ void Resolver::resolve(const ast::Module& module) {
                              SymbolKind::Function,
                              false,
                              true,
+                             false,
                              ast::Visibility::Public,
                              "",
                              "Void",
-                             {"Bool"}});
+                             {"Bool", "String"}});
     current_scope_->declare({"Some",
                              SymbolKind::Function,
                              false,
                              true,
+                             false,
                              ast::Visibility::Public,
                              "",
                              "Option<T>",
                              {"T"}});
-    current_scope_->declare(
-        {"None", SymbolKind::Variable, false, true, ast::Visibility::Public, "", "Option<T>", {}});
+    current_scope_->declare({"None",
+                             SymbolKind::Variable,
+                             false,
+                             true,
+                             false,
+                             ast::Visibility::Public,
+                             "",
+                             "Option<T>",
+                             {}});
     current_scope_->declare({"Ok",
                              SymbolKind::Function,
                              false,
                              true,
+                             false,
                              ast::Visibility::Public,
                              "",
                              "Result<T,E>",
@@ -1485,6 +1504,7 @@ void Resolver::resolve(const ast::Module& module) {
                              SymbolKind::Function,
                              false,
                              true,
+                             false,
                              ast::Visibility::Public,
                              "",
                              "Result<T,E>",
@@ -1517,6 +1537,7 @@ void Resolver::resolve_module(const ast::Module& module) {
                                  SymbolKind::Variable,
                                  false,
                                  true,
+                                 false,
                                  ast::Visibility::Private,
                                  "",
                                  "Module",
@@ -1527,7 +1548,7 @@ void Resolver::resolve_module(const ast::Module& module) {
     for (const auto& ta : module.type_aliases) {
         type_aliases_[ta.name] = ta.target_type;
         current_scope_->declare(
-            {ta.name, SymbolKind::Variable, false, true, ta.visibility, "", "FluxType", {}});
+            {ta.name, SymbolKind::Variable, false, true, false, ta.visibility, "", "FluxType", {}});
     }
 
     // Validate type aliases (catch circular definitions early)
@@ -1538,7 +1559,7 @@ void Resolver::resolve_module(const ast::Module& module) {
     // Declare types (structs, enums, classes, traits)
     for (const auto& s : module.structs) {
         current_scope_->declare(
-            {s.name, SymbolKind::Variable, false, true, s.visibility, "", "FluxType", {}});
+            {s.name, SymbolKind::Variable, false, true, false, s.visibility, "", "FluxType", {}});
         // Store struct fields for type checking
         std::vector<FieldInfo> fields;
         for (const auto& f : s.fields) {
@@ -1563,7 +1584,7 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     for (const auto& c : module.classes) {
         current_scope_->declare(
-            {c.name, SymbolKind::Variable, false, true, c.visibility, "", "FluxType", {}});
+            {c.name, SymbolKind::Variable, false, true, false, c.visibility, "", "FluxType", {}});
         std::vector<FieldInfo> fields;
         for (const auto& f : c.fields) {
             fields.push_back({f.name, f.type, f.visibility});
@@ -1587,7 +1608,7 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     for (const auto& e : module.enums) {
         current_scope_->declare(
-            {e.name, SymbolKind::Variable, false, true, e.visibility, "", "FluxType", {}});
+            {e.name, SymbolKind::Variable, false, true, false, e.visibility, "", "FluxType", {}});
         std::vector<std::string> vars;
         vars.reserve(e.variants.size());
         for (const auto& [name, types] : e.variants) {
@@ -1612,7 +1633,7 @@ void Resolver::resolve_module(const ast::Module& module) {
 
     for (const auto& t : module.traits) {
         current_scope_->declare(
-            {t.name, SymbolKind::Variable, false, true, t.visibility, "", "Trait", {}});
+            {t.name, SymbolKind::Variable, false, true, false, t.visibility, "", "Trait", {}});
         auto bounds = parse_where_clause(t.where_clause);
         std::vector<std::string> combined = t.type_params;
         for (const auto& b : bounds) {
@@ -1678,6 +1699,7 @@ void Resolver::resolve_module(const ast::Module& module) {
         sym.kind = SymbolKind::Function;
         sym.type = fn.return_type;
         sym.param_types = std::move(params);
+        sym.is_moved = false; // Added
 
         if (!current_scope_->declare(sym)) {
             throw DiagnosticError("duplicate function '" + fn.name + "'", 0, 0);
@@ -1864,7 +1886,7 @@ void Resolver::resolve_module(const ast::Module& module) {
                         }
 
                         current_scope_->declare({qualified_name, SymbolKind::Function, false, true,
-                                                 ast::Visibility::Public, "", ret_type,
+                                                 false, ast::Visibility::Public, "", ret_type,
                                                  std::move(params)});
                     }
                 }
@@ -1895,6 +1917,7 @@ void Resolver::resolve_module(const ast::Module& module) {
             sym.type = method.return_type;
             sym.param_types = std::move(params);
             sym.visibility = method.visibility;
+            sym.is_moved = false; // Added
 
             current_scope_->declare(sym);
             function_decls_[qualified_name] = &method;
@@ -1945,6 +1968,7 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& 
     for (const auto& param : fn.params) {
         if (!current_scope_->declare({param.name,
                                       SymbolKind::Variable,
+                                      false,
                                       false,
                                       false,
                                       ast::Visibility::None,
@@ -2017,6 +2041,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
     // let / const
     if (const auto* let_stmt = dynamic_cast<const ast::LetStmt*>(&stmt)) {
         // 1. Compute initializer type
+        resolve_expression(*let_stmt->initializer);
         FluxType init_type = type_of(*let_stmt->initializer);
 
         // 2. Declared type (must be explicit)
@@ -2046,11 +2071,22 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                                       SymbolKind::Variable,
                                       let_stmt->is_mutable,
                                       let_stmt->is_const,
+                                      false, // is_moved
                                       ast::Visibility::None,
                                       "",
                                       let_stmt->type_name,
                                       {}})) {
             throw DiagnosticError("duplicate variable '" + let_stmt->name + "'", 0, 0);
+        }
+
+        // Implicit move for non-Copy types
+        if (auto id_expr = dynamic_cast<const ast::IdentifierExpr*>(let_stmt->initializer.get())) {
+            Symbol* source_sym = current_scope_->lookup_mut(id_expr->name);
+            if (source_sym && source_sym->kind == SymbolKind::Variable) {
+                if (!is_copy_type(source_sym->type)) {
+                    source_sym->is_moved = true;
+                }
+            }
         }
 
         return false;
@@ -2061,7 +2097,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
         const auto* id = dynamic_cast<const ast::IdentifierExpr*>(asg->target.get());
 
         if (id) {
-            const Symbol* sym = current_scope_->lookup(id->name);
+            Symbol* sym = current_scope_->lookup_mut(id->name);
             if (!sym) {
                 throw DiagnosticError("assignment to undeclared variable '" + id->name + "'", 0, 0);
             }
@@ -2078,11 +2114,25 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
             const FluxType lhs = type_from_name(sym->type);
 
             if (asg->op == TokenKind::Assign) {
-                if (const FluxType rhs = type_of(*asg->value);
-                    lhs != rhs && lhs.kind != TypeKind::Unknown && rhs.kind != TypeKind::Unknown) {
-                    throw DiagnosticError("cannot assign value of type '" + rhs.name +
-                                              "' to variable of type '" + lhs.name + "'",
+                resolve_expression(*asg->value);
+                FluxType val_type = type_of(*asg->value);
+                if (!are_types_compatible(type_from_name(sym->type), val_type)) {
+                    throw DiagnosticError("cannot assign type '" + val_type.name +
+                                              "' to variable of type '" + sym->type + "'",
                                           0, 0);
+                }
+
+                // Revival: assigning to a moved variable makes it valid again
+                sym->is_moved = false;
+
+                // Implicit move for non-Copy types (source)
+                if (auto val_id = dynamic_cast<const ast::IdentifierExpr*>(asg->value.get())) {
+                    Symbol* source_sym = current_scope_->lookup_mut(val_id->name);
+                    if (source_sym && source_sym->kind == SymbolKind::Variable) {
+                        if (!is_copy_type(source_sym->type)) {
+                            source_sym->is_moved = true;
+                        }
+                    }
                 }
             } else {
                 // Compound assignment — type-check the RHS
@@ -2139,6 +2189,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                                  SymbolKind::Variable,
                                  false,
                                  false,
+                                 false, // is_moved
                                  ast::Visibility::None,
                                  "",
                                  var_type,
@@ -2321,16 +2372,64 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
             return;
         }
 
-        if (!current_scope_->lookup(id->name)) {
+        Symbol* sym = current_scope_->lookup_mut(id->name);
+        if (!sym) {
             throw DiagnosticError("use of undeclared identifier '" + id->name + "'", 0, 0);
+        }
+        if (sym->kind == SymbolKind::Variable && sym->is_moved) {
+            throw DiagnosticError("use of moved value '" + id->name + "'", 0, 0);
         }
         return;
     }
 
     if (const auto* call = dynamic_cast<const ast::CallExpr*>(&expr)) {
         (void)type_of(expr);
-        for (const auto& arg : call->arguments) {
-            resolve_expression(*arg);
+
+        // Determine parameter types for implicit move check
+        std::vector<FluxType> param_types;
+        bool is_inferred_ctor = false; // For Ok, Err, Some
+
+        if (auto callee_id = dynamic_cast<const ast::IdentifierExpr*>(call->callee.get())) {
+            if (callee_id->name == "Ok" || callee_id->name == "Err" || callee_id->name == "Some") {
+                is_inferred_ctor = true;
+            }
+        }
+
+        try {
+            // Re-fetch type to get signature (safe since type_of(expr) succeeded)
+            FluxType callee_type = type_of(*call->callee);
+            if (callee_type.kind == TypeKind::Function) {
+                param_types = callee_type.param_types;
+            }
+        } catch (...) {
+        }
+
+        for (size_t i = 0; i < call->arguments.size(); ++i) {
+            resolve_expression(*call->arguments[i]);
+
+            // Implicit move for non-Copy arguments
+            if (auto id_expr = dynamic_cast<const ast::IdentifierExpr*>(call->arguments[i].get())) {
+                bool should_move = false;
+                if (is_inferred_ctor) {
+                    should_move = true;
+                } else if (i < param_types.size()) {
+                    // If parameter is NOT a reference, it consumes the value
+                    if (!param_types[i].name.starts_with("&")) {
+                        should_move = true;
+                    }
+                }
+
+                if (should_move) {
+                    Symbol* sym = current_scope_->lookup_mut(id_expr->name);
+                    if (sym && sym->kind == SymbolKind::Variable) {
+                        if (!is_copy_type(sym->type)) {
+                            std::cout << "DEBUG: Marking " << id_expr->name
+                                      << " as moved (CallExpr)" << std::endl;
+                            sym->is_moved = true;
+                        }
+                    }
+                }
+            }
         }
         return;
     }
@@ -2356,6 +2455,20 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
     }
 
     if (const auto* mv = dynamic_cast<const ast::MoveExpr*>(&expr)) {
+        if (auto id = dynamic_cast<const ast::IdentifierExpr*>(mv->operand.get())) {
+            // Check if it's a variable
+            Symbol* sym = current_scope_->lookup_mut(id->name);
+            if (!sym) {
+                throw DiagnosticError("use of undeclared identifier '" + id->name + "'", 0, 0);
+            }
+            if (sym->kind == SymbolKind::Variable) {
+                if (sym->is_moved) {
+                    throw DiagnosticError("use of moved value '" + id->name + "'", 0, 0);
+                }
+                sym->is_moved = true;
+            }
+            return;
+        }
         resolve_expression(*mv->operand);
         return;
     }
@@ -2371,6 +2484,16 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
         }
         for (const auto& field : sl->fields) {
             resolve_expression(*field.value);
+
+            // Implicit move for struct fields
+            if (auto id_expr = dynamic_cast<const ast::IdentifierExpr*>(field.value.get())) {
+                Symbol* sym = current_scope_->lookup_mut(id_expr->name);
+                if (sym && sym->kind == SymbolKind::Variable) {
+                    if (!is_copy_type(sym->type)) {
+                        sym->is_moved = true;
+                    }
+                }
+            }
         }
         return;
     }
@@ -2424,6 +2547,7 @@ void Resolver::resolve_pattern(const ast::Pattern& pattern) {
                                       SymbolKind::Variable,
                                       false,
                                       true,
+                                      false, // is_moved
                                       ast::Visibility::None,
                                       "",
                                       "Unknown",
@@ -2817,6 +2941,24 @@ bool Resolver::compare_signatures(
     }
 
     return true;
+}
+
+bool Resolver::is_copy_type(const std::string& type_name) {
+    if (type_name == "Int8" || type_name == "Int16" || type_name == "Int32" ||
+        type_name == "Int64" || type_name == "Int128" || type_name == "UInt8" ||
+        type_name == "UInt16" || type_name == "UInt32" || type_name == "UInt64" ||
+        type_name == "UInt128" || type_name == "IntPtr" || type_name == "UIntPtr" ||
+        type_name == "Float32" || type_name == "Float64" || type_name == "Bool" ||
+        type_name == "Char" || type_name == "Void" || type_name == "Never") {
+        return true;
+    }
+    // Pointers are Copy
+    if (type_name.starts_with("*"))
+        return true;
+    // References are Copy (they are non-owning)
+    if (type_name.starts_with("&"))
+        return true;
+    return false;
 }
 
 void Resolver::monomorphize_recursive() {

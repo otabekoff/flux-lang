@@ -27,6 +27,17 @@ class Scope {
         return nullptr;
     }
 
+    Symbol* lookup_mut(const std::string& name) {
+        auto it = symbols_.find(name);
+        if (it != symbols_.end())
+            return &it->second;
+
+        if (parent_)
+            return parent_->lookup_mut(name);
+
+        return nullptr;
+    }
+
     Scope* parent() const {
         return parent_;
     }

@@ -59,16 +59,16 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Trait conformance checking** — verify every `impl Display for Point` provides all required methods with correct signatures. (Tested in `trait_conformance.cpp`)
 - [x] **Default method bodies** — allow traits to have default implementations. (Tested in `trait_default_methods.cpp`)
 - [x] **Trait method dispatch** — resolve `x.to_string()` through the trait impl, not just by name. (Complete, supports inherent/trait methods, references, and generics)
-- [ ] **Orphan rules** — prevent implementing foreign traits on foreign types.
+- [x] **Orphan rules** — prevent implementing foreign traits on foreign types.
 - [x] **Impl method self-type validation** — check that `self` parameter type matches the impl target. (Includes `&self` and `&mut self` matching)
 
 ### 1.4 Ownership & Borrowing
 
-- [ ] **Move semantics enforcement** — after `let b = move a;`, mark `a` as consumed; error on subsequent use.
+- [x] **Move semantics enforcement** — after `let b = move a;`, mark `a` as consumed; error on subsequent use. (Implemented in Phase 1.4)
 - [ ] **Borrow checker (basic)** — prevent aliasing mutable borrows; enforce single `&mut` or multiple `&` rule.
 - [ ] **Lifetime analysis (simplified)** — ensure references do not outlive their referents within a function scope.
 - [ ] **Drop semantics** — insert implicit `drop()` at scope exit; validate manual `drop()` calls.
-- [ ] **Copy vs Move distinction** — primitive types (Int, Float, Bool, Char) are Copy; structs/enums are Move by default unless annotated.
+- [x] **Copy vs Move distinction** — primitive types (Int, Float, Bool, Char) are Copy; structs/enums are Move by default unless annotated. (Implemented in Phase 1.4)
 
 ### 1.5 Pattern Matching
 
@@ -93,7 +93,7 @@ Complete the resolver so that every language feature described in the spec is fu
 
 ### 1.8 Visibility Enforcement
 
-- [ ] **`pub` / `private` access checking** — private struct fields and functions not accessible outside their module.
+- [x] **`pub` / `private` access checking** — private struct fields and functions not accessible outside their module. (Default-private behavior enforced)
 - [ ] **Module-level visibility** — enforce visibility across module boundaries once module resolution is implemented.
 
 ### 1.9 Concurrency Semantics
@@ -312,7 +312,7 @@ Implement the core types and functions referenced in the language spec.
 | 8   | `?` error propagation parsed but not semantically checked                                    | `resolver.cpp`                 | Open   |
 | 9   | `unsafe` keyword recognized but not semantically modeled                                     | `resolver.cpp`                 | Open   |
 | 10  | `await` allowed outside `async` functions                                                    | `resolver.cpp`                 | Open   |
-| 11  | No move tracking — using a variable after `move` is not an error                             | `resolver.cpp`                 | Open   |
+| 11  | No move tracking — using a variable after `move` is not an error                             | `resolver.cpp`                 | Fixed  |
 | 12  | Diagnostics lack accurate source locations (many errors report `0:0`)                        | `resolver.cpp`, `diagnostic.h` | Open   |
 | 13  | Single-error-abort — resolver throws on first error instead of collecting multiple           | `resolver.cpp`                 | Open   |
 | 17  | `parse_type()` does not support `[T; N]` array type syntax in annotations                    | `parser.cpp`                   | Fixed  |
@@ -415,5 +415,3 @@ Implement the core types and functions referenced in the language spec.
 - [x] Documentation and roadmap updated
 
 ---
-
-the thing and fat

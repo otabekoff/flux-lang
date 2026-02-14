@@ -49,8 +49,9 @@ struct TypeParamBound {
     std::vector<std::string> bounds;
 };
 
-class Resolver {
+struct Resolver {
   public:
+    Resolver() = default;
     void resolve(const ast::Module& module);
 
   public:
@@ -115,7 +116,7 @@ class Resolver {
     bool are_types_compatible(const ::flux::semantic::FluxType& target,
                               const ::flux::semantic::FluxType& source) const;
 
-  private:
+  public:
     static ::flux::semantic::FluxType unknown_type() {
         return {TypeKind::Unknown, "Unknown"};
     }
@@ -128,7 +129,7 @@ class Resolver {
                                    const std::vector<::flux::semantic::FluxType>& args);
     std::vector<std::string> get_bounds_for_type(const std::string& type_name);
 
-  private:
+  public:
     std::vector<std::unique_ptr<Scope>> all_scopes_;
     Scope* current_scope_ = nullptr;
     const Scope& current_scope() const {
@@ -167,6 +168,7 @@ class Resolver {
     std::unordered_map<std::string, const ast::FunctionDecl*> function_decls_;
     std::unordered_map<std::string, ::flux::semantic::FluxType> substitution_map_;
 
+    static bool is_copy_type(const std::string& type_name);
     void monomorphize_recursive();
 };
 } // namespace flux::semantic
