@@ -62,12 +62,12 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **Orphan rules** — prevent implementing foreign traits on foreign types.
 - [x] **Impl method self-type validation** — check that `self` parameter type matches the impl target. (Includes `&self` and `&mut self` matching)
 
-### 1.4 Ownership & Borrowing
+### 1.4 Ownership & Borrowing [COMPLETED]
 
 - [x] **Move semantics enforcement** — after `let b = move a;`, mark `a` as consumed; error on subsequent use. (Implemented in Phase 1.4)
-- [ ] **Borrow checker (basic)** — prevent aliasing mutable borrows; enforce single `&mut` or multiple `&` rule.
-- [ ] **Lifetime analysis (simplified)** — ensure references do not outlive their referents within a function scope.
-- [ ] **Drop semantics** — insert implicit `drop()` at scope exit; validate manual `drop()` calls.
+- [x] **Borrow checker (basic)** — prevent aliasing mutable borrows; enforce single `&mut` or multiple `&` rule.
+- [x] **Lifetime analysis (simplified)** — ensure references do not outlive their referents within a function scope.
+- [x] **Drop semantics** — insert implicit `drop()` at scope exit; validate manual `drop()` calls.
 - [x] **Copy vs Move distinction** — primitive types (Int, Float, Bool, Char) are Copy; structs/enums are Move by default unless annotated. (Implemented in Phase 1.4)
 
 ### 1.5 Pattern Matching [COMPLETED]

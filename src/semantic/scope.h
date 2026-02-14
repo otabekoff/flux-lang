@@ -9,9 +9,13 @@ namespace flux::semantic {
 
 class Scope {
   public:
-    explicit Scope(Scope* parent = nullptr) : parent_(parent) {}
+    explicit Scope(Scope* parent = nullptr, uint32_t depth = 0) : parent_(parent), depth_(depth) {}
+    uint32_t depth() const {
+        return depth_;
+    }
 
-    bool declare(const Symbol& symbol) {
+    bool declare(Symbol symbol) {
+        symbol.scope_depth = depth_;
         auto [_, inserted] = symbols_.emplace(symbol.name, symbol);
         return inserted;
     }
@@ -51,6 +55,7 @@ class Scope {
 
   private:
     Scope* parent_;
+    uint32_t depth_;
     std::unordered_map<std::string, Symbol> symbols_;
 };
 

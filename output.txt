@@ -1,0 +1,5 @@
+test_multiple_immutable_borrows passed.
+test_mutable_borrow_exclusivity passed (caught expected error: error: cannot mutably borrow 'x' while it is immutably borrowed at 0:0).
+test_dual_mutable_borrows passed (caught expected error: error: cannot mutably borrow 'x' more than once at a time at 0:0).
+test_borrow_moved_value failed: caught error 'error: use of moved value 'x' at 0:0', but expected 'cannot borrow moved value'.
+Assertion failed: false, file D:\project\tutorial\flux\tests\ownership_borrowing.cpp, line 65

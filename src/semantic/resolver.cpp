@@ -292,7 +292,8 @@ FluxType Resolver::type_from_name_internal(const std::string& name,
 
     // Reference types
     if (name.starts_with("&")) {
-        return {TypeKind::Ref, name};
+        bool is_mut = name.starts_with("&mut");
+        return {TypeKind::Ref, name, is_mut};
     }
 
     // Array types: [T; N] or Slice types: [T]
@@ -2377,12 +2378,46 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
             }
         }
 
-        // Implicit move for non-Copy types
-        if (auto id_expr = dynamic_cast<const ast::IdentifierExpr*>(let_stmt->initializer.get())) {
-            Symbol* source_sym = current_scope_->lookup_mut(id_expr->name);
-            if (source_sym && source_sym->kind == SymbolKind::Variable) {
-                if (!is_copy_type(source_sym->type)) {
-                    source_sym->is_moved = true;
+        // Ownership & Borrowing Phase 1.4: Lifetime check and borrow propagation
+        if (let_stmt->initializer) {
+            Symbol* target_sym = current_scope_->lookup_mut(let_stmt->name);
+            if (target_sym) {
+                if (auto un = dynamic_cast<const ast::UnaryExpr*>(let_stmt->initializer.get())) {
+                    if (un->op == TokenKind::Amp) {
+                        if (auto id_inner =
+                                dynamic_cast<const ast::IdentifierExpr*>(un->operand.get())) {
+                            Symbol* source_sym = current_scope_->lookup_mut(id_inner->name);
+                            if (source_sym) {
+                                if (target_sym->scope_depth < source_sym->scope_depth) {
+                                    throw DiagnosticError("variable '" + let_stmt->name +
+                                                              "' outlives borrowed value '" +
+                                                              id_inner->name + "'",
+                                                          0, 0);
+                                }
+                                target_sym->borrowed_symbol_name = id_inner->name;
+                            }
+                        }
+                    }
+                } else if (auto id_init = dynamic_cast<const ast::IdentifierExpr*>(
+                               let_stmt->initializer.get())) {
+                    Symbol* source_sym = current_scope_->lookup_mut(id_init->name);
+                    if (source_sym) {
+                        if (!source_sym->borrowed_symbol_name.empty()) {
+                            target_sym->borrowed_symbol_name = source_sym->borrowed_symbol_name;
+                            Symbol* root_sym =
+                                current_scope_->lookup_mut(source_sym->borrowed_symbol_name);
+                            if (root_sym) {
+                                if (!target_sym->type.starts_with("&mut")) {
+                                    root_sym->borrow_count++;
+                                }
+                            }
+                        }
+
+                        // Implicit move for non-Copy types
+                        if (!is_copy_type(source_sym->type)) {
+                            source_sym->is_moved = true;
+                        }
+                    }
                 }
             }
         }
@@ -2754,6 +2789,41 @@ void Resolver::resolve_expression(const ast::Expr& expr) {
 
     if (const auto* un = dynamic_cast<const ast::UnaryExpr*>(&expr)) {
         resolve_expression(*un->operand);
+
+        if (un->op == TokenKind::Amp) {
+            // It's a reference & or &mut
+            if (auto id = dynamic_cast<const ast::IdentifierExpr*>(un->operand.get())) {
+                Symbol* sym = current_scope_->lookup_mut(id->name);
+                if (sym && sym->kind == SymbolKind::Variable) {
+                    if (sym->is_moved) {
+                        throw DiagnosticError("cannot borrow moved value '" + id->name + "'", 0, 0);
+                    }
+
+                    if (un->is_mutable) {
+                        // &mut
+                        if (sym->is_mutably_borrowed) {
+                            throw DiagnosticError("cannot mutably borrow '" + id->name +
+                                                      "' more than once at a time",
+                                                  0, 0);
+                        }
+                        if (sym->borrow_count > 0) {
+                            throw DiagnosticError("cannot mutably borrow '" + id->name +
+                                                      "' while it is immutably borrowed",
+                                                  0, 0);
+                        }
+                        sym->is_mutably_borrowed = true;
+                    } else {
+                        // &
+                        if (sym->is_mutably_borrowed) {
+                            throw DiagnosticError("cannot immutably borrow '" + id->name +
+                                                      "' while it is mutably borrowed",
+                                                  0, 0);
+                        }
+                        sym->borrow_count++;
+                    }
+                }
+            }
+        }
         return;
     }
 
@@ -3593,8 +3663,8 @@ bool Resolver::is_copy_type(const std::string& type_name) {
     // Pointers are Copy
     if (type_name.starts_with("*"))
         return true;
-    // References are Copy (they are non-owning)
-    if (type_name.starts_with("&"))
+    // References are Copy (they are non-owning), except for &mut which must be unique
+    if (type_name.starts_with("&") && !type_name.starts_with("&mut"))
         return true;
     return false;
 }
