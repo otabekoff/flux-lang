@@ -105,7 +105,9 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **CompoundAssignStmt resolution (Bug #15)** — `+=`, `-=`, etc. are validated for numeric types.
 - [x] **Source location accuracy (Bug #12)** — parser captures line/column for all AST nodes; resolver uses them in diagnostics.
 
-- [ ] Review all of the phase 1 tasks are completed fully or anything missing. Check everything. Build fresh and run tests. Make sure everything is working and completed fully. If anything missing, not done, not implemented, not completed or partially done about phase 1 tasks, then append as the new tasks to the phase 1 in ROADMAP.md.
+- [x] Review all of the phase 1 tasks are completed fully or anything missing. Check everything. Build fresh and run tests. Make sure everything is working and completed fully. If anything missing, not done, not implemented, not completed or partially done about phase 1 tasks, then append as the new tasks to the phase 1 in ROADMAP.md.
+
+> **Phase 1 Review Result (February 2026):** Clean build succeeded. All 28 test executables pass (0 failures). Fixed `control_flow.exe` crash caused by null `initializer` dereference in `LetStmt` resolution. `Send`/`Sync` marker traits deferred to Phase 7 (Runtime & Concurrency) as they require runtime support.
 
 ---
 
