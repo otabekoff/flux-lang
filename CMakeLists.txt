@@ -59,11 +59,62 @@ target_link_libraries(flux PRIVATE flux_core)
 
 
 # --------------------------------------------------
+# LLVM Integration
+# --------------------------------------------------
+set(LLVM_INSTALL_DIR "C:/Program Files/LLVM")
+set(LLVM_SRC_DIR "C:/libs/llvm-project-18.1.8/llvm")
+
+if(EXISTS "${LLVM_SRC_DIR}/include/llvm-c/Core.h")
+    message(STATUS "Using LLVM headers from: ${LLVM_SRC_DIR}/include")
+    include_directories("${LLVM_SRC_DIR}/include")
+    link_directories("${LLVM_INSTALL_DIR}/lib")
+    set(LLVM_LIBS "LLVM-C")
+else()
+    message(STATUS "LLVM source headers not found, searching system...")
+    find_package(LLVM REQUIRED CONFIG)
+    message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+    message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+    
+    llvm_map_components_to_libnames(llvm_libs core support native)
+    set(LLVM_LIBS ${llvm_libs})
+    
+    include_directories(${LLVM_INCLUDE_DIRS})
+    add_definitions(${LLVM_DEFINITIONS})
+endif()
+
+
+# --------------------------------------------------
+# Codegen library
+# --------------------------------------------------
+add_library(flux_codegen
+    src/codegen/codegen.cpp
+    src/codegen/type_converter.cpp
+)
+
+target_include_directories(flux_codegen PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(flux_codegen PUBLIC 
+    flux_core 
+    ${LLVM_LIBS}
+)
+
+
+# --------------------------------------------------
 # Helper function for tests
 # --------------------------------------------------
 function(add_flux_test name)
     add_executable(${name} tests/${name}.cpp)
     target_link_libraries(${name} PRIVATE flux_core)
+    # If test needs codegen, we can link flux_codegen too. 
+    # For now default is flux_core. 
+    # We will see if we need separate helper for codegen tests.
+endfunction()
+
+function(add_codegen_test name)
+    add_executable(${name} tests/${name}.cpp)
+    target_link_libraries(${name} PRIVATE flux_codegen flux_core)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
@@ -71,6 +122,8 @@ enable_testing()
 
 add_flux_test(numeric_promotion)
 add_flux_test(tuple)
+# ... existing tests ...
+# I will keep existing add_flux_test calls unchanged and append others.
 add_flux_test(struct_field)
 add_flux_test(array_slice)
 
@@ -102,6 +155,8 @@ add_flux_test(ownership_borrowing)
 add_flux_test(concurrency)
 add_flux_test(hardening_phase1)
 add_flux_test(ir_basic)
+
+add_codegen_test(codegen_basic)
 
 
 # By this what we've earned?

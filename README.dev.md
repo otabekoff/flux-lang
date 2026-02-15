@@ -264,3 +264,8 @@ ctest -C Debug --output-on-failure
 
 ---
  cmake --build build --config Debug && .\build\Debug\concurrency.exe && .\build\Debug\hardening_phase1.exe && .\build\Debug\move_semantics.exe
+
+----
+
+
+mkdir .tools && cd .tools && curl -L -o llvm.7z https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/LLVM-17.0.6-win64.exe
