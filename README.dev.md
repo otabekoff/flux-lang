@@ -257,15 +257,27 @@ Unable to get the location of clang-format executable - no active workspace sele
 fat and thin arrows -> and => should be fixed.
 
 ---
-
+```bash
 $tests = Get-ChildItem "build\Debug\*.exe" | Where-Object { $_.Name -notin @("fluxc.exe") }; foreach ($t in $tests) { Write-Host "=== $($t.Name) ===" -ForegroundColor Cyan; & $t.FullName 2>&1 | Select-Object -Last 3; if ($LASTEXITCODE -ne 0) { Write-Host "FAILED!" -ForegroundColor Red } }
 
 ctest -C Debug --output-on-failure
-
+```
 ---
- cmake --build build --config Debug && .\build\Debug\concurrency.exe && .\build\Debug\hardening_phase1.exe && .\build\Debug\move_semantics.exe
-
+```bash
+cmake --build build --config Debug && .\build\Debug\concurrency.exe && .\build\Debug\hardening_phase1.exe && .\build\Debug\move_semantics.exe
+```
 ----
 
-
+```bash
 mkdir .tools && cd .tools && curl -L -o llvm.7z https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/LLVM-17.0.6-win64.exe
+```
+
+---
+
+Generated IR verification by running:
+```bash
+cmake --build build --target codegen_basic --config Debug $env:PATH += ";C:\Program Files\LLVM\bin"; .\build\Debug\codegen_basic.exe
+
+
+cmake --build build --target flux --config Debug && .\build\Debug\flux.exe examples\minimal_codegen.fl --emit-llvm
+```

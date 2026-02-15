@@ -1,0 +1,9 @@
+module minimal_codegen;
+
+func add(a: Int32, b: Int32) -> Int32 {
+    return a + b;
+}
+
+func main() -> Void {
+    let result: Int32 = add(10, 20);
+}

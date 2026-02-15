@@ -16,6 +16,11 @@ IRFunction* IRBuilder::create_function(const std::string& name, std::vector<Valu
     fn->params = std::move(params);
     fn->return_type = std::move(return_type);
 
+    for (auto& p : fn->params) {
+        if (p->id == 0)
+            p->id = next_value_id_++;
+    }
+
     auto* ptr = fn.get();
     module_.functions.push_back(std::move(fn));
     current_function_ = ptr;

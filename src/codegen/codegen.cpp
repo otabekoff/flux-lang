@@ -126,10 +126,47 @@ void CodeGenerator::compile_instruction(const ir::Instruction& inst) {
                                "divtmp");
         break;
 
+    case ir::Opcode::Eq:
+        result = LLVMBuildICmp(builder, LLVMIntEQ, get_value(inst.operands[0]),
+                               get_value(inst.operands[1]), "eqtmp");
+        break;
+    case ir::Opcode::Ne:
+        result = LLVMBuildICmp(builder, LLVMIntNE, get_value(inst.operands[0]),
+                               get_value(inst.operands[1]), "netmp");
+        break;
+    case ir::Opcode::Lt:
+        result = LLVMBuildICmp(builder, LLVMIntSLT, get_value(inst.operands[0]),
+                               get_value(inst.operands[1]), "lttmp");
+        break;
+    case ir::Opcode::Le:
+        result = LLVMBuildICmp(builder, LLVMIntSLE, get_value(inst.operands[0]),
+                               get_value(inst.operands[1]), "letmp");
+        break;
+    case ir::Opcode::Gt:
+        result = LLVMBuildICmp(builder, LLVMIntSGT, get_value(inst.operands[0]),
+                               get_value(inst.operands[1]), "gttmp");
+        break;
+    case ir::Opcode::Ge:
+        result = LLVMBuildICmp(builder, LLVMIntSGE, get_value(inst.operands[0]),
+                               get_value(inst.operands[1]), "getmp");
+        break;
+
+    case ir::Opcode::LogicAnd:
+        result = LLVMBuildAnd(builder, get_value(inst.operands[0]), get_value(inst.operands[1]),
+                              "andtmp");
+        break;
+    case ir::Opcode::LogicOr:
+        result =
+            LLVMBuildOr(builder, get_value(inst.operands[0]), get_value(inst.operands[1]), "ortmp");
+        break;
+    case ir::Opcode::LogicNot:
+        result = LLVMBuildNot(builder, get_value(inst.operands[0]), "nottmp");
+        break;
+
     case ir::Opcode::Alloca: {
         TypeConverter tc(context);
-        LLVMTypeRef type = tc.convert(*inst.type->pointee);
-        result = LLVMBuildAlloca(builder, type, "allocatmp");
+        LLVMTypeRef allocated_type = tc.convert(*inst.type);
+        result = LLVMBuildAlloca(builder, allocated_type, "allocatmp");
         break;
     }
     case ir::Opcode::Load: {
@@ -139,7 +176,68 @@ void CodeGenerator::compile_instruction(const ir::Instruction& inst) {
         break;
     }
     case ir::Opcode::Store: {
-        LLVMBuildStore(builder, get_value(inst.operands[1]), get_value(inst.operands[0]));
+        LLVMBuildStore(builder, get_value(inst.operands[0]), get_value(inst.operands[1]));
+        break;
+    }
+    case ir::Opcode::Bitcast: {
+        TypeConverter tc(context);
+        result = LLVMBuildBitCast(builder, get_value(inst.operands[0]), tc.convert(*inst.type),
+                                  "bitcasttmp");
+        break;
+    }
+    case ir::Opcode::IntCast: {
+        TypeConverter tc(context);
+        result = LLVMBuildIntCast2(builder, get_value(inst.operands[0]), tc.convert(*inst.type),
+                                   true, "intcasttmp");
+        break;
+    }
+    case ir::Opcode::FloatCast: {
+        TypeConverter tc(context);
+        result = LLVMBuildFPCast(builder, get_value(inst.operands[0]), tc.convert(*inst.type),
+                                 "fpcasttmp");
+        break;
+    }
+    case ir::Opcode::IntToFloat: {
+        TypeConverter tc(context);
+        result = LLVMBuildSIToFP(builder, get_value(inst.operands[0]), tc.convert(*inst.type),
+                                 "itofptmp");
+        break;
+    }
+    case ir::Opcode::FloatToInt: {
+        TypeConverter tc(context);
+        result = LLVMBuildFPToSI(builder, get_value(inst.operands[0]), tc.convert(*inst.type),
+                                 "fptointtmp");
+        break;
+    }
+
+    case ir::Opcode::GetField: {
+        TypeConverter tc(context);
+        LLVMTypeRef struct_type = tc.convert(*inst.operands[0]->type->pointee);
+        result = LLVMBuildStructGEP2(builder, struct_type, get_value(inst.operands[0]),
+                                     inst.field_index, "fieldtmp");
+        break;
+    }
+    case ir::Opcode::GetElementPtr: {
+        TypeConverter tc(context);
+        LLVMTypeRef elem_type = tc.convert(*inst.type->pointee);
+        std::vector<LLVMValueRef> indices = {
+            LLVMConstInt(LLVMInt32TypeInContext(context), 0, false)};
+        for (const auto& op : inst.operands) {
+            if (op != inst.operands[0])
+                indices.push_back(get_value(op));
+        }
+        result = LLVMBuildGEP2(builder, elem_type, get_value(inst.operands[0]), indices.data(),
+                               static_cast<unsigned>(indices.size()), "geptmp");
+        break;
+    }
+    case ir::Opcode::ExtractValue: {
+        result = LLVMBuildExtractValue(builder, get_value(inst.operands[0]), inst.field_index,
+                                       "extracttmp");
+        break;
+    }
+    case ir::Opcode::InsertValue: {
+        result = LLVMBuildInsertValue(builder, get_value(inst.operands[0]),
+                                      get_value(inst.operands[1]), inst.field_index, "inserttmp");
         break;
     }
 

@@ -130,12 +130,12 @@ Design and implement a lowered IR suitable for optimization and code generation.
 
 Produce native executables via LLVM.
 
-- [ ] **LLVM integration** — link against LLVM C API or LLVM-C++ API; set up JIT or AOT pipeline.
-- [ ] **Primitive type mapping** — map Flux `Int32` → LLVM `i32`, `Float64` → LLVM `double`, `Bool` → `i1`, etc.
-- [ ] **Function codegen** — emit LLVM IR for function definitions, calls, returns.
-- [ ] **Control flow codegen** — `if`/`else`, `while`, `for`, `loop`, `break`, `continue`, `match`.
-- [ ] **Struct/enum layout** — compute field offsets, padding, alignment; emit struct types.
-- [ ] **Class codegen** — heap allocation, vtable dispatch for classes.
+- [x] **LLVM integration** — link against LLVM C API; integrated into `flux` driver with `--emit-llvm`.
+- [x] **Primitive type mapping** — mapped `Void`, `Int`, `Float`, `Bool`, `Ptr`, etc. to LLVM.
+- [x] **Function codegen** — emitting LLVM IR for function definitions, calls, returns.
+- [/] **Control flow codegen** — `if`/`else`, `while`, `br`, `condbr` done. `match` optimized `Switch` pending.
+- [/] **Struct/enum layout** — `Struct`/`Tuple` done. `Enum` (tagged union) layout pending.
+- [ ] **Class codegen** — heap allocation, vtable dispatch for classes. (Phase 4)
 - [ ] **Generics monomorphization** — generate concrete versions of generic functions/types.
 - [ ] **Pattern matching compilation** — lower `match` to decision trees / jump tables.
 - [ ] **String representation** — define runtime string layout (length-prefixed, UTF-8).
@@ -144,7 +144,7 @@ Produce native executables via LLVM.
 - [ ] **Async/await codegen** — state machine transformation for async functions.
 - [ ] **Ownership/drop codegen** — insert destructor calls, move semantics at IR level.
 - [ ] **Debug info (DWARF)** — emit source-level debug information for debuggers.
-- [ ] **Target support** — x86-64 (primary), AArch64, WebAssembly (stretch).
+- [x] **Target support** — x86-64 (primary) via LLVM target triple.
 
 ---
 
@@ -283,6 +283,7 @@ Implement the core types and functions referenced in the language spec.
 
 ## Phase 8 — Optimization & Performance
 
+- [ ] **Class codegen** — heap allocation, vtable dispatch for classes. (Phase 4)
 - [ ] **Constant propagation** — propagate known values through the IR.
 - [ ] **Dead code elimination** — remove unused functions and unreachable blocks.
 - [ ] **Inlining** — inline small functions and `@inline`-annotated functions.

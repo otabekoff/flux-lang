@@ -51,12 +51,6 @@ target_include_directories(flux_core PUBLIC
 
 target_link_libraries(flux_core PUBLIC flux_warnings)
 
-# --------------------------------------------------
-# Main executable
-# --------------------------------------------------
-add_executable(flux src/main.cpp)
-target_link_libraries(flux PRIVATE flux_core)
-
 
 # --------------------------------------------------
 # LLVM Integration
@@ -68,7 +62,7 @@ if(EXISTS "${LLVM_SRC_DIR}/include/llvm-c/Core.h")
     message(STATUS "Using LLVM headers from: ${LLVM_SRC_DIR}/include")
     include_directories("${LLVM_SRC_DIR}/include")
     link_directories("${LLVM_INSTALL_DIR}/lib")
-    set(LLVM_LIBS "LLVM-C")
+    set(LLVM_LIBS "${LLVM_INSTALL_DIR}/lib/LLVM-C.lib")
 else()
     message(STATUS "LLVM source headers not found, searching system...")
     find_package(LLVM REQUIRED CONFIG)
@@ -99,6 +93,15 @@ target_link_libraries(flux_codegen PUBLIC
     flux_core 
     ${LLVM_LIBS}
 )
+
+
+# --------------------------------------------------
+# Main executable
+# --------------------------------------------------
+add_executable(flux src/main.cpp)
+target_link_libraries(flux PRIVATE flux_core flux_codegen)
+
+
 
 
 # --------------------------------------------------

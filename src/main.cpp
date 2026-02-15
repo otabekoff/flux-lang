@@ -22,6 +22,9 @@
 #include "ir/passes/inliner.h"
 #include "ir/passes/ir_verifier.h"
 
+// Codegen
+#include "codegen/codegen.h"
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "flux: no input file\n";
@@ -30,12 +33,15 @@ int main(int argc, char** argv) {
 
     const char* const path = argv[1];
     bool emit_ir = false;
+    bool emit_llvm = false;
 
     // Parse flags
     for (int i = 2; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--emit-ir")
             emit_ir = true;
+        else if (arg == "--emit-llvm")
+            emit_llvm = true;
     }
 
     std::ifstream file(path);
@@ -98,6 +104,14 @@ int main(int argc, char** argv) {
         if (emit_ir) {
             flux::ir::IRPrinter printer;
             printer.print(ir_module, std::cout);
+        }
+
+        // Codegen
+        if (emit_llvm) {
+            std::cout << "Generating LLVM IR...\n";
+            flux::codegen::CodeGenerator generator;
+            generator.compile(ir_module);
+            std::cout << generator.to_string() << std::endl;
         }
 
     } catch (const flux::DiagnosticError& e) {
