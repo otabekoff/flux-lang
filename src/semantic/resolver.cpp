@@ -2319,16 +2319,10 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
 
     // let / const
     if (const auto* let_stmt = dynamic_cast<const ast::LetStmt*>(&stmt)) {
-        // 1. Compute initializer type
-        resolve_expression(*let_stmt->initializer);
-        FluxType init_type = type_of(*let_stmt->initializer);
-
-        // 2. Declared type (must be explicit)
+        // 1. Declared type (must be explicit)
         FluxType declared_type = type_from_name(let_stmt->type_name);
         if (declared_type.kind == TypeKind::Unknown &&
             !type_aliases_.contains(let_stmt->type_name)) {
-            // Allow generic/complex types to pass (e.g. Box<Int32>)
-            // Only error on truly unknown simple types
             bool is_complex = let_stmt->type_name.find('<') != std::string::npos ||
                               let_stmt->type_name.find('&') != std::string::npos ||
                               let_stmt->type_name.find('(') != std::string::npos;
@@ -2338,13 +2332,20 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
             }
         }
 
-        // 3. Enforce compatibility
-        if (!are_types_compatible(declared_type, init_type)) {
-            std::string var_name = let_stmt->name.empty() ? "(tuple)" : let_stmt->name;
-            throw DiagnosticError("cannot initialize variable '" + var_name + "' of type '" +
-                                      declared_type.name + "' with value of type '" +
-                                      init_type.name + "'",
-                                  stmt.line, stmt.column);
+        // 2. Compute initializer type and enforce compatibility (only if initializer present)
+        FluxType init_type = unknown_type();
+        if (let_stmt->initializer) {
+            resolve_expression(*let_stmt->initializer);
+            init_type = type_of(*let_stmt->initializer);
+
+            // 3. Enforce compatibility
+            if (!are_types_compatible(declared_type, init_type)) {
+                std::string var_name = let_stmt->name.empty() ? "(tuple)" : let_stmt->name;
+                throw DiagnosticError("cannot initialize variable '" + var_name + "' of type '" +
+                                          declared_type.name + "' with value of type '" +
+                                          init_type.name + "'",
+                                      stmt.line, stmt.column);
+            }
         }
 
         // 4. Declare symbol(s)
