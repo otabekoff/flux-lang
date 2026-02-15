@@ -41,6 +41,8 @@ add_library(flux_core
     src/ir/ir_printer.cpp
     src/ir/passes/constant_folding.cpp
     src/ir/passes/dead_code_elimination.cpp
+    src/ir/passes/ir_verifier.cpp
+    src/ir/passes/inliner.cpp
 )
 
 target_include_directories(flux_core PUBLIC

@@ -10,6 +10,8 @@
 #include "ir/ir_printer.h"
 #include "ir/passes/constant_folding.h"
 #include "ir/passes/dead_code_elimination.h"
+#include "ir/passes/inliner.h"
+#include "ir/passes/ir_verifier.h"
 
 using namespace flux::ir;
 
@@ -407,6 +409,85 @@ bool test_pass_pipeline() {
     return true;
 }
 
+// ── Test: Verifier ──────────────────────────────────────────
+
+bool test_ir_verifier() {
+    IRBuilder builder;
+    auto i32 = make_i32();
+    builder.create_function("bad_func", {}, i32);
+    // Empty block (unterminated)
+
+    IRVerifierPass verifier;
+    try {
+        verifier.run(builder.module());
+        std::cout << "  [FAIL] Verifier failed to catch empty block\n";
+        return false;
+    } catch (const std::runtime_error&) {
+        // Expected
+    }
+
+    // Add terminator
+    builder.emit_ret(make_const_i32(0));
+    try {
+        verifier.run(builder.module());
+    } catch (const std::runtime_error& e) {
+        std::cout << "  [FAIL] Verifier rejected valid function: " << e.what() << "\n";
+        return false;
+    }
+
+    std::cout << "  [PASS] test_ir_verifier\n";
+    return true;
+}
+
+// ── Test: Inliner ───────────────────────────────────────────
+
+bool test_inliner() {
+    IRBuilder builder;
+    auto i32 = make_i32();
+
+    // Callee: func inc(x) { return x + 1; }
+    builder.create_function("inc", {builder.create_value(i32, "x")}, i32);
+    auto p = builder.current_function()->params[0];
+    auto one = make_const_i32(1);
+    auto res = builder.emit_add(p, one);
+    builder.emit_ret(res);
+
+    // Caller: func main() { return inc(10); }
+    builder.create_function("main", {}, i32);
+    auto ten = make_const_i32(10);
+    auto call_res = builder.emit_call("inc", {ten}, i32);
+    builder.emit_ret(call_res);
+
+    InlinerPass inliner;
+    // We expect modification
+    if (!inliner.run(builder.module())) {
+        std::cout << "  [FAIL] Inliner reported no modification\n";
+        return false;
+    }
+
+    auto main_fn = builder.module().functions.back().get();
+    bool has_call = false;
+    bool has_add = false;
+    for (const auto& inst : main_fn->blocks[0]->instructions) {
+        if (inst->opcode == Opcode::Call)
+            has_call = true;
+        if (inst->opcode == Opcode::Add)
+            has_add = true;
+    }
+
+    if (has_call) {
+        std::cout << "  [FAIL] Call instruction remains after inlining\n";
+        return false;
+    }
+    if (!has_add) {
+        std::cout << "  [FAIL] Inlined instruction missing\n";
+        return false;
+    }
+
+    std::cout << "  [PASS] test_inliner\n";
+    return true;
+}
+
 // ── Main ────────────────────────────────────────────────────
 
 int main() {
@@ -428,6 +509,8 @@ int main() {
     all_passed &= test_struct_layout();
     all_passed &= test_constant_folding_float();
     all_passed &= test_pass_pipeline();
+    all_passed &= test_ir_verifier();
+    all_passed &= test_inliner();
 
     std::cout << "\n" << tests_passed << "/" << tests_run << " assertions passed.\n";
 

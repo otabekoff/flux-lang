@@ -22,6 +22,10 @@ class IRBuilder {
         return module_;
     }
 
+    void set_next_id(ValueID id) {
+        next_value_id_ = id;
+    }
+
     // ── Functions ───────────────────────────────────────────
     IRFunction* create_function(const std::string& name, std::vector<ValuePtr> params,
                                 std::shared_ptr<IRType> return_type);

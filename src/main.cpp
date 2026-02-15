@@ -19,6 +19,8 @@
 #include "ir/ir_printer.h"
 #include "ir/passes/constant_folding.h"
 #include "ir/passes/dead_code_elimination.h"
+#include "ir/passes/inliner.h"
+#include "ir/passes/ir_verifier.h"
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -77,8 +79,18 @@ int main(int argc, char** argv) {
         // IR Optimization Passes
         std::cout << "Running IR passes...\n";
         std::vector<std::unique_ptr<flux::ir::IRPass>> passes;
+
+        // Validation (Pre-opt)
+        passes.push_back(std::make_unique<flux::ir::IRVerifierPass>());
+
+        // Optimizations
+        passes.push_back(std::make_unique<flux::ir::InlinerPass>());
         passes.push_back(std::make_unique<flux::ir::ConstantFoldingPass>());
         passes.push_back(std::make_unique<flux::ir::DeadCodeEliminationPass>());
+
+        // Validation (Post-opt)
+        passes.push_back(std::make_unique<flux::ir::IRVerifierPass>());
+
         int modified = flux::ir::run_passes(ir_module, passes);
         std::cout << "IR passes complete. Passes that modified IR: " << modified << "\n";
 

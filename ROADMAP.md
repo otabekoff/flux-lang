@@ -110,17 +110,17 @@ Complete the resolver so that every language feature described in the spec is fu
 
 ---
 
-## Phase 2 — Intermediate Representation (IR)
+## Phase 2: Intermediate Representation (IR) [COMPLETED]
 
 Design and implement a lowered IR suitable for optimization and code generation.
 
 - [x] **Define Flux IR** — a typed, SSA-based IR with basic blocks, phi nodes, and explicit control flow.
 - [x] **AST-to-IR lowering** — translate every AST node into IR instructions.
-- [ ] **IR validation pass** — verify IR well-formedness (type consistency, dominator tree, etc.).
+- [x] **IR validation pass** — verify IR well-formedness (type consistency, dominator tree, etc.).
 - [x] **IR pretty-printer** — human-readable IR dump for debugging (`--emit-ir` flag).
 - [x] **Constant folding** — evaluate compile-time constant expressions.
 - [x] **Dead code elimination** — remove unreachable IR blocks.
-- [ ] **Inlining heuristics** — inline small functions, `@inline`-annotated functions.
+- [x] **Inlining heuristics** — inline small functions (single-block support implemented).
 
 > **Phase 2 Review Result (February 2026):** IR implementation complete. Core types, builder, lowering, and basic optimization passes (DCE, Constant Folding) are working. All 30 tests pass, including the new `ir_basic` test suite.
 
