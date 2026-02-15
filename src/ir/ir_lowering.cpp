@@ -14,6 +14,21 @@ IRLowering::IRLowering() = default;
 // ── Type conversion ─────────────────────────────────────────
 
 std::shared_ptr<IRType> IRLowering::lower_type(const std::string& type_name) {
+    if (type_name.empty())
+        return make_void();
+
+    if (type_name[0] == '&') {
+        bool is_mut = false;
+        std::string pointee_name;
+        if (type_name.substr(1, 4) == "mut ") {
+            is_mut = true;
+            pointee_name = type_name.substr(5);
+        } else {
+            pointee_name = type_name.substr(1);
+        }
+        return make_ptr(lower_type(pointee_name));
+    }
+
     if (type_name == "Int8")
         return make_i8();
     if (type_name == "Int16")
@@ -133,10 +148,15 @@ void IRLowering::lower_function(const ast::FunctionDecl& fn) {
     }
 
     auto ret_type = lower_type(fn.return_type);
-    auto* ir_fn = builder_.create_function(fn.name, std::move(params), ret_type);
+    auto* ir_fn = builder_.create_function(fn.name, std::move(params), ret_type, fn.is_external);
     ir_fn->is_async = fn.is_async;
+    ir_fn->is_external = fn.is_external;
     ir_fn->line = fn.line;
     ir_fn->column = fn.column;
+
+    if (fn.is_external) {
+        return;
+    }
 
     enter_scope();
 
@@ -650,6 +670,30 @@ ValuePtr IRLowering::lower_call_expr(const ast::CallExpr& expr) {
     std::string callee_name = "unknown";
     if (auto* id = dynamic_cast<const ast::IdentifierExpr*>(expr.callee.get())) {
         callee_name = id->name;
+    } else if (auto* bin = dynamic_cast<const ast::BinaryExpr*>(expr.callee.get())) {
+        if (bin->op == TokenKind::ColonColon) {
+            // Traverse the BinaryExpr chain to get the full name
+            std::vector<std::string> parts;
+            const ast::Expr* current = expr.callee.get();
+            while (auto* b = dynamic_cast<const ast::BinaryExpr*>(current)) {
+                if (b->op != TokenKind::ColonColon)
+                    break;
+                if (auto* rhs_id = dynamic_cast<const ast::IdentifierExpr*>(b->right.get())) {
+                    parts.insert(parts.begin(), rhs_id->name);
+                }
+                current = b->left.get();
+            }
+            if (auto* root_id = dynamic_cast<const ast::IdentifierExpr*>(current)) {
+                parts.insert(parts.begin(), root_id->name);
+            }
+
+            callee_name = "";
+            for (size_t i = 0; i < parts.size(); ++i) {
+                if (i > 0)
+                    callee_name += "::";
+                callee_name += parts[i];
+            }
+        }
     }
 
     // Lower arguments

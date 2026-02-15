@@ -33,8 +33,8 @@ void CodeGenerator::compile(const ir::IRModule& ir_module) {
     value_map.clear();
     block_map.clear();
 
+    // Pass 1: Declare all functions and create their basic blocks
     for (const auto& ir_func : ir_module.functions) {
-        // 1. Create function prototype
         std::vector<LLVMTypeRef> param_types;
         for (const auto& param : ir_func->params) {
             param_types.push_back(type_converter.convert(*param->type));
@@ -49,13 +49,21 @@ void CodeGenerator::compile(const ir::IRModule& ir_module) {
             value_map[ir_func->params[i]->id] = LLVMGetParam(llvm_func, static_cast<unsigned>(i));
         }
 
-        // 2. Create basic blocks
-        for (const auto& ir_block : ir_func->blocks) {
-            block_map[ir_block.get()] =
-                LLVMAppendBasicBlockInContext(context, llvm_func, ir_block->label.c_str());
+        if (!ir_func->is_external) {
+            for (const auto& ir_block : ir_func->blocks) {
+                block_map[ir_block.get()] =
+                    LLVMAppendBasicBlockInContext(context, llvm_func, ir_block->label.c_str());
+            }
+        }
+    }
+
+    // Pass 2: Compile function bodies
+    for (const auto& ir_func : ir_module.functions) {
+        if (ir_func->is_external) {
+            continue;
         }
 
-        // 3. Pass 1: Create all instructions (and Phi nodes without incoming edges)
+        // 1. Create all instructions (and Phi nodes without incoming edges)
         for (const auto& ir_block : ir_func->blocks) {
             LLVMPositionBuilderAtEnd(builder, block_map[ir_block.get()]);
             for (const auto& inst : ir_block->instructions) {
@@ -69,7 +77,7 @@ void CodeGenerator::compile(const ir::IRModule& ir_module) {
             }
         }
 
-        // 4. Pass 2: Populate Phi incoming edges
+        // 2. Populate Phi incoming edges
         for (const auto& ir_block : ir_func->blocks) {
             for (const auto& inst : ir_block->instructions) {
                 if (inst->opcode == ir::Opcode::Phi) {
@@ -90,7 +98,7 @@ void CodeGenerator::compile(const ir::IRModule& ir_module) {
     }
 }
 
-LLVMValueRef CodeGenerator::get_value(const ir::ValuePtr& val) {
+LLVMValueRef CodeGenerator::get_value(ir::ValuePtr val) {
     if (val->is_constant) {
         TypeConverter tc(context);
         LLVMTypeRef type = tc.convert(*val->type);
@@ -102,6 +110,8 @@ LLVMValueRef CodeGenerator::get_value(const ir::ValuePtr& val) {
             return LLVMConstReal(type, *p);
         if (auto p = std::get_if<bool>(&val->constant_value))
             return LLVMConstInt(type, *p ? 1 : 0, false);
+        if (auto p = std::get_if<std::string>(&val->constant_value))
+            return LLVMBuildGlobalStringPtr(builder, p->c_str(), "strtmp");
     }
     return value_map.at(val->id);
 }

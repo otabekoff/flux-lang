@@ -619,6 +619,7 @@ struct FunctionDecl : Node {
     Block body;
     Visibility visibility = Visibility::None;
     bool is_async = false;
+    bool is_external = false;
     bool has_body = false;
     std::string where_clause; // raw string for now
 
@@ -634,6 +635,7 @@ struct FunctionDecl : Node {
         }
         new_fn->visibility = visibility;
         new_fn->is_async = is_async;
+        new_fn->is_external = is_external;
         new_fn->has_body = has_body;
         new_fn->where_clause = where_clause;
         return new_fn;

@@ -52,6 +52,7 @@ struct TypeParamBound {
 struct Resolver {
   public:
     Resolver() = default;
+    void resolve(const std::vector<ast::Module*>& modules);
     void resolve(const ast::Module& module);
     void initialize_intrinsics();
 
@@ -61,6 +62,8 @@ struct Resolver {
     void exit_scope();
 
     // Structure
+    void declare_module(const ast::Module& module);
+    void resolve_module_bodies(const ast::Module& module);
     void resolve_module(const ast::Module& module);
     void resolve_function(const ast::FunctionDecl& fn, const std::string& name = "");
     bool resolve_block(const ast::Block& block);
@@ -95,6 +98,7 @@ struct Resolver {
     // expressions
     ::flux::semantic::FluxType type_of(const ast::Expr& expr);
     ::flux::semantic::FluxType type_from_name(const std::string& name);
+    std::string resolve_name(const std::string& name, const std::string& module_name = "") const;
 
   public:
     struct TraitMethodSig {
@@ -172,6 +176,8 @@ struct Resolver {
     std::unordered_map<std::string, std::vector<FieldInfo>> struct_fields_;
     std::unordered_map<std::string, std::vector<FieldInfo>> class_fields_;
     std::unordered_map<std::string, std::string> type_aliases_;
+    // module_name -> (alias -> full_path)
+    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> module_aliases_;
     std::unordered_map<std::string, std::vector<TraitMethodSig>> trait_methods_;
     std::unordered_map<std::string, std::unordered_set<std::string>> trait_impls_;
     std::unordered_map<std::string, std::vector<std::string>> function_type_params_;

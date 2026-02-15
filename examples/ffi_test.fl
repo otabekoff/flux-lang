@@ -1,0 +1,10 @@
+module ffi_test;
+
+extern func printf(fmt: &UInt8, val: Int32) -> Int32;
+
+func main() -> Int32 {
+    let x: Int32 = 42;
+    // printf("Value: %d\n", x); -- String literals not fully supported in codegen yet
+    // but the call logic should work.
+    return x;
+}

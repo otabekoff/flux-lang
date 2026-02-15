@@ -15,6 +15,7 @@ enum class TokenKind {
     Pub,
     Public,
     Private,
+    Extern,
 
     // punctuation
     Semicolon,   // ;
@@ -98,6 +99,8 @@ inline const char* to_string(TokenKind kind) {
         return "Public";
     case TokenKind::Private:
         return "Private";
+    case TokenKind::Extern:
+        return "Extern";
 
     case TokenKind::Semicolon:
         return "Semicolon";

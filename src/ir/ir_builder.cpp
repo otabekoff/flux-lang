@@ -10,11 +10,12 @@ IRBuilder::IRBuilder() = default;
 // ── Functions ───────────────────────────────────────────────
 
 IRFunction* IRBuilder::create_function(const std::string& name, std::vector<ValuePtr> params,
-                                       std::shared_ptr<IRType> return_type) {
+                                       std::shared_ptr<IRType> return_type, bool is_external) {
     auto fn = std::make_unique<IRFunction>();
     fn->name = name;
     fn->params = std::move(params);
     fn->return_type = std::move(return_type);
+    fn->is_external = is_external;
 
     for (auto& p : fn->params) {
         if (p->id == 0)
@@ -25,9 +26,13 @@ IRFunction* IRBuilder::create_function(const std::string& name, std::vector<Valu
     module_.functions.push_back(std::move(fn));
     current_function_ = ptr;
 
-    // Create entry block
-    auto* entry = create_block("entry");
-    set_insert_point(entry);
+    if (!is_external) {
+        // Create entry block
+        auto* entry = create_block("entry");
+        set_insert_point(entry);
+    } else {
+        insert_point_ = nullptr;
+    }
 
     return ptr;
 }

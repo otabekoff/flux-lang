@@ -10,21 +10,26 @@ namespace flux::semantic {
 
 Monomorphizer::Monomorphizer(const ::flux::semantic::Resolver& resolver) : resolver_(resolver) {}
 
-::flux::ast::Module Monomorphizer::monomorphize(const ::flux::ast::Module& module) {
-    auto cloned_module = module.clone();
-    ::flux::ast::Module new_module =
-        std::move(*static_cast<::flux::ast::Module*>(cloned_module.get()));
+::flux::ast::Module Monomorphizer::monomorphize(const ::flux::ast::Module& main_module) {
+    ::flux::ast::Module assembly;
+    assembly.name = main_module.name;
 
-    new_module.functions.clear();
-
-    for (const auto& fn : module.functions) {
-        if (fn.type_params.empty()) {
-            auto cloned_fn = fn.clone();
-            new_module.functions.push_back(
-                std::move(*static_cast<::flux::ast::FunctionDecl*>(cloned_fn.get())));
+    // 1. Collect all non-generic functions from all modules
+    for (const auto& [name, decl_ptr] : resolver_.function_decls()) {
+        if (decl_ptr->type_params.empty()) {
+            auto cloned_fn = decl_ptr->clone();
+            ::flux::ast::FunctionDecl fn =
+                std::move(*static_cast<::flux::ast::FunctionDecl*>(cloned_fn.get()));
+            // Ensure non-namespaced functions in main module keep their names,
+            // but others use their qualified names.
+            if (name.find("::") != std::string::npos) {
+                fn.name = name;
+            }
+            assembly.functions.push_back(std::move(fn));
         }
     }
 
+    // 2. Instantiate all required specializations
     for (const auto& inst : resolver_.function_instantiations()) {
         std::string mangled = mangle_name(inst.name, inst.args);
         if (instantiated_functions_.find(mangled) != instantiated_functions_.end()) {
@@ -33,18 +38,23 @@ Monomorphizer::Monomorphizer(const ::flux::semantic::Resolver& resolver) : resol
 
         try {
             auto specialized = instantiate_function(inst.name, inst.args);
-            new_module.functions.push_back(std::move(specialized));
+            assembly.functions.push_back(std::move(specialized));
         } catch (const std::exception& e) {
             std::cerr << "Warning: Failed to instantiate " << inst.name << ": " << e.what() << "\n";
         }
     }
 
     std::unordered_map<std::string, ::flux::semantic::FluxType> empty_map;
-    for (auto& fn : new_module.functions) {
-        substitute_in_function(fn, empty_map);
+    for (auto& fn : assembly.functions) {
+        // Derive the module context from the function's qualified name
+        std::string fn_module = assembly.name;
+        if (auto pos = fn.name.rfind("::"); pos != std::string::npos) {
+            fn_module = fn.name.substr(0, pos);
+        }
+        substitute_in_function(fn, empty_map, fn_module);
     }
 
-    return new_module;
+    return assembly;
 }
 
 std::string Monomorphizer::mangle_name(const std::string& name,
@@ -145,71 +155,75 @@ Monomorphizer::instantiate_function(const std::string& original_name,
 
 void Monomorphizer::substitute_in_function(
     ::flux::ast::FunctionDecl& fn,
-    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping) {
+    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+    const std::string& module_name) {
     fn.return_type = substitute_type_name(fn.return_type, mapping);
     for (auto& param : fn.params) {
         param.type = substitute_type_name(param.type, mapping);
     }
-    substitute_in_block(fn.body, mapping);
+    substitute_in_block(fn.body, mapping, module_name);
 }
 
 void Monomorphizer::substitute_in_block(
     ::flux::ast::Block& block,
-    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping) {
-    for (const auto& stmt : block.statements) {
+    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+    const std::string& module_name) {
+    for (auto& stmt : block.statements) {
         if (stmt)
-            substitute_in_stmt(*stmt, mapping);
+            substitute_in_stmt(stmt, mapping, module_name);
     }
 }
 
 void Monomorphizer::substitute_in_stmt(
-    ::flux::ast::Stmt& stmt,
-    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping) {
-    if (auto* rs = dynamic_cast<::flux::ast::ReturnStmt*>(&stmt)) {
+    ::flux::ast::StmtPtr& stmt,
+    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+    const std::string& module_name) {
+    if (auto* rs = dynamic_cast<::flux::ast::ReturnStmt*>(stmt.get())) {
         if (rs->expression)
-            substitute_in_expr(*rs->expression, mapping);
-    } else if (auto* ls = dynamic_cast<::flux::ast::LetStmt*>(&stmt)) {
+            substitute_in_expr(rs->expression, mapping, module_name);
+    } else if (auto* ls = dynamic_cast<::flux::ast::LetStmt*>(stmt.get())) {
         ls->type_name = substitute_type_name(ls->type_name, mapping);
         if (ls->initializer)
-            substitute_in_expr(*ls->initializer, mapping);
-    } else if (auto* as = dynamic_cast<::flux::ast::AssignStmt*>(&stmt)) {
+            substitute_in_expr(ls->initializer, mapping, module_name);
+    } else if (auto* as = dynamic_cast<::flux::ast::AssignStmt*>(stmt.get())) {
         if (as->target)
-            substitute_in_expr(*as->target, mapping);
+            substitute_in_expr(as->target, mapping, module_name);
         if (as->value)
-            substitute_in_expr(*as->value, mapping);
-    } else if (auto* bs = dynamic_cast<::flux::ast::BlockStmt*>(&stmt)) {
-        substitute_in_block(bs->block, mapping);
-    } else if (auto* is = dynamic_cast<::flux::ast::IfStmt*>(&stmt)) {
+            substitute_in_expr(as->value, mapping, module_name);
+    } else if (auto* bs = dynamic_cast<::flux::ast::BlockStmt*>(stmt.get())) {
+        substitute_in_block(bs->block, mapping, module_name);
+    } else if (auto* is = dynamic_cast<::flux::ast::IfStmt*>(stmt.get())) {
         if (is->condition)
-            substitute_in_expr(*is->condition, mapping);
+            substitute_in_expr(is->condition, mapping, module_name);
         if (is->then_branch)
-            substitute_in_stmt(*is->then_branch, mapping);
+            substitute_in_stmt(is->then_branch, mapping, module_name);
         if (is->else_branch)
-            substitute_in_stmt(*is->else_branch, mapping);
-    } else if (auto* ws = dynamic_cast<::flux::ast::WhileStmt*>(&stmt)) {
+            substitute_in_stmt(is->else_branch, mapping, module_name);
+    } else if (auto* ws = dynamic_cast<::flux::ast::WhileStmt*>(stmt.get())) {
         if (ws->condition)
-            substitute_in_expr(*ws->condition, mapping);
+            substitute_in_expr(ws->condition, mapping, module_name);
         if (ws->body)
-            substitute_in_stmt(*ws->body, mapping);
-    } else if (auto* es = dynamic_cast<::flux::ast::ExprStmt*>(&stmt)) {
+            substitute_in_stmt(ws->body, mapping, module_name);
+    } else if (auto* es = dynamic_cast<::flux::ast::ExprStmt*>(stmt.get())) {
         if (es->expression)
-            substitute_in_expr(*es->expression, mapping);
+            substitute_in_expr(es->expression, mapping, module_name);
     }
 }
 
 void Monomorphizer::substitute_in_expr(
-    ::flux::ast::Expr& expr,
-    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping) {
-    if (auto* ident_node = dynamic_cast<::flux::ast::IdentifierExpr*>(&expr)) {
+    ::flux::ast::ExprPtr& expr,
+    const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+    const std::string& module_name) {
+    if (auto* ident_node = dynamic_cast<::flux::ast::IdentifierExpr*>(expr.get())) {
         if (mapping.find(ident_node->name) != mapping.end()) {
             ident_node->name = mapping.at(ident_node->name).name;
         }
-    } else if (auto* call = dynamic_cast<::flux::ast::CallExpr*>(&expr)) {
+    } else if (auto* call = dynamic_cast<::flux::ast::CallExpr*>(expr.get())) {
         if (call->callee)
-            substitute_in_expr(*call->callee, mapping);
+            substitute_in_expr(call->callee, mapping, module_name);
         for (auto& arg : call->arguments) {
             if (arg)
-                substitute_in_expr(*arg, mapping);
+                substitute_in_expr(arg, mapping, module_name);
         }
 
         if (call->callee) {
@@ -249,36 +263,89 @@ void Monomorphizer::substitute_in_expr(
 
                     callee_node->name = mangled;
                 }
+
+                // Qualify bare function names within namespaced modules
+                // e.g., inside std::io::println, "puts" -> "std::io::puts"
+                if (callee_node->name.find("::") == std::string::npos && !module_name.empty() &&
+                    module_name.find("::") != std::string::npos) {
+                    std::string qualified = module_name + "::" + callee_node->name;
+                    const auto& decls = resolver_.function_decls();
+                    if (decls.find(qualified) != decls.end()) {
+                        callee_node->name = qualified;
+                    }
+                }
             }
         }
-    } else if (auto* bin = dynamic_cast<::flux::ast::BinaryExpr*>(&expr)) {
+    } else if (auto* bin = dynamic_cast<::flux::ast::BinaryExpr*>(expr.get())) {
+        if (bin->op == ::flux::TokenKind::ColonColon) {
+            // Hierarchical name resolution: io::println -> std::io::println
+            std::vector<std::string> parts;
+            ::flux::ast::Expr* current = expr.get();
+            bool valid_chain = true;
+            while (auto* b = dynamic_cast<::flux::ast::BinaryExpr*>(current)) {
+                if (b->op != ::flux::TokenKind::ColonColon) {
+                    valid_chain = false;
+                    break;
+                }
+                if (auto* rhs_id = dynamic_cast<::flux::ast::IdentifierExpr*>(b->right.get())) {
+                    parts.insert(parts.begin(), rhs_id->name);
+                } else {
+                    valid_chain = false;
+                    break;
+                }
+                current = b->left.get();
+            }
+
+            if (valid_chain) {
+                if (auto* root_id = dynamic_cast<::flux::ast::IdentifierExpr*>(current)) {
+                    parts.insert(parts.begin(), root_id->name);
+                    std::string full_name;
+                    for (size_t i = 0; i < parts.size(); ++i) {
+                        if (i > 0)
+                            full_name += "::";
+                        full_name += parts[i];
+                    }
+
+                    // Resolve the name
+                    std::string resolved = resolver_.resolve_name(full_name, module_name);
+
+                    // Replace BinaryExpr with IdentifierExpr
+                    auto new_id = std::make_unique<::flux::ast::IdentifierExpr>(resolved);
+                    new_id->line = expr->line;
+                    new_id->column = expr->column;
+                    expr = std::move(new_id);
+                    return; // Done with this branch
+                }
+            }
+        }
+
         if (bin->left)
-            substitute_in_expr(*bin->left, mapping);
+            substitute_in_expr(bin->left, mapping, module_name);
         if (bin->right)
-            substitute_in_expr(*bin->right, mapping);
-    } else if (auto* un = dynamic_cast<::flux::ast::UnaryExpr*>(&expr)) {
+            substitute_in_expr(bin->right, mapping, module_name);
+    } else if (auto* un = dynamic_cast<::flux::ast::UnaryExpr*>(expr.get())) {
         if (un->operand)
-            substitute_in_expr(*un->operand, mapping);
-    } else if (auto* sl = dynamic_cast<::flux::ast::StructLiteralExpr*>(&expr)) {
+            substitute_in_expr(un->operand, mapping, module_name);
+    } else if (auto* sl = dynamic_cast<::flux::ast::StructLiteralExpr*>(expr.get())) {
         sl->struct_name = substitute_type_name(sl->struct_name, mapping);
         for (auto& field : sl->fields) {
             if (field.value)
-                substitute_in_expr(*field.value, mapping);
+                substitute_in_expr(field.value, mapping, module_name);
         }
-    } else if (auto* ma = dynamic_cast<::flux::ast::MemberAccessExpr*>(&expr)) {
+    } else if (auto* ma = dynamic_cast<::flux::ast::MemberAccessExpr*>(expr.get())) {
         if (ma->object)
-            substitute_in_expr(*ma->object, mapping);
+            substitute_in_expr(ma->object, mapping, module_name);
     }
 }
 
 void Monomorphizer::substitute_in_pattern(
-    ::flux::ast::Pattern& pattern,
+    ::flux::ast::PatternPtr& pattern,
     const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping) {
-    if (auto* vp = dynamic_cast<::flux::ast::VariantPattern*>(&pattern)) {
+    if (auto* vp = dynamic_cast<::flux::ast::VariantPattern*>(pattern.get())) {
         vp->variant_name = substitute_type_name(vp->variant_name, mapping);
         for (auto& sub : vp->sub_patterns) {
             if (sub)
-                substitute_in_pattern(*sub, mapping);
+                substitute_in_pattern(sub, mapping);
         }
     }
 }

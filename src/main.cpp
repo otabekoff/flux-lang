@@ -25,6 +25,11 @@
 // Codegen
 #include "codegen/codegen.h"
 
+// Driver
+#include "driver/module_loader.h"
+#include <filesystem>
+#include <map>
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "flux: no input file\n";
@@ -44,36 +49,37 @@ int main(int argc, char** argv) {
             emit_llvm = true;
     }
 
-    std::ifstream file(path);
-    if (!file) {
-        std::cerr << "flux: could not open file: " << path << '\n';
-        return 1;
-    }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
+    std::string entry_path = path;
 
     try {
-        flux::Lexer lexer(buffer.str());
-        const auto tokens = lexer.tokenize();
+        flux::ModuleLoader loader;
+        // Search in current directory and std/
+        loader.add_search_path(std::filesystem::current_path() / "std");
 
-        flux::Parser parser(tokens);
-        const flux::ast::Module module = parser.parse_module();
+        std::cout << "Loading modules...\n";
+        auto* main_module = loader.load(entry_path);
 
-        std::cout << "Parsed module: " << module.name << '\n';
+        std::vector<flux::ast::Module*> modules;
+        for (auto& [name, mod] :
+             const_cast<std::map<std::string, flux::ast::Module>&>(loader.modules())) {
+            modules.push_back(&mod);
+        }
+
+        std::cout << "Loaded " << modules.size() << " modules.\n";
 
         flux::semantic::Resolver resolver;
-        resolver.resolve(module);
+        resolver.resolve(modules);
 
         std::cout << "Semantic analysis OK\n";
 
         // Monomorphization
         std::cout << "Starting monomorphization...\n";
         flux::semantic::Monomorphizer monomorphizer(resolver);
-        flux::ast::Module monomorphized_module = monomorphizer.monomorphize(module);
+        flux::ast::Module monomorphized_module = monomorphizer.monomorphize(*main_module);
 
         std::cout << "Monomorphization OK. Specialized functions generated: "
-                  << (monomorphized_module.functions.size() - module.functions.size()) << "\n";
+                  << (monomorphized_module.functions.size() - main_module->functions.size())
+                  << "\n";
 
         // IR Lowering
         std::cout << "Lowering to IR...\n";

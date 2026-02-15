@@ -28,7 +28,7 @@ class IRBuilder {
 
     // ── Functions ───────────────────────────────────────────
     IRFunction* create_function(const std::string& name, std::vector<ValuePtr> params,
-                                std::shared_ptr<IRType> return_type);
+                                std::shared_ptr<IRType> return_type, bool is_external = false);
 
     // ── Blocks ──────────────────────────────────────────────
     BasicBlock* create_block(const std::string& label);

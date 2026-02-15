@@ -30,7 +30,7 @@ class CodeGenerator {
     // Map Flux IR BasicBlock pointer to LLVM BasicBlock
     std::unordered_map<const ir::BasicBlock*, LLVMBasicBlockRef> block_map;
 
-    LLVMValueRef get_value(const ir::ValuePtr& val);
+    LLVMValueRef get_value(ir::ValuePtr val);
     void compile_instruction(const ir::Instruction& inst);
 };
 

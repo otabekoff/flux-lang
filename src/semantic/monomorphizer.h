@@ -32,18 +32,26 @@ class Monomorphizer {
     // Substitutions
     void substitute_in_function(
         ::flux::ast::FunctionDecl& fn,
-        const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping);
+        const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+        const std::string& module_name = "");
+
     void
     substitute_in_block(::flux::ast::Block& block,
-                        const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping);
+                        const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+                        const std::string& module_name = "");
+
     void
-    substitute_in_stmt(::flux::ast::Stmt& stmt,
-                       const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping);
+    substitute_in_stmt(::flux::ast::StmtPtr& stmt,
+                       const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+                       const std::string& module_name = "");
+
     void
-    substitute_in_expr(::flux::ast::Expr& expr,
-                       const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping);
+    substitute_in_expr(::flux::ast::ExprPtr& expr,
+                       const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping,
+                       const std::string& module_name = "");
+
     void substitute_in_pattern(
-        ::flux::ast::Pattern& pattern,
+        ::flux::ast::PatternPtr& pattern,
         const std::unordered_map<std::string, ::flux::semantic::FluxType>& mapping);
 
     // Helpers

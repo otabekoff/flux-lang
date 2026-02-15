@@ -630,7 +630,7 @@ ast::Module Parser::parse_module() {
 
     if (peek().kind == TokenKind::Keyword && peek().lexeme == "module") {
         advance();
-        module.name = expect(TokenKind::Identifier, "expected module name").lexeme;
+        module.name = parse_module_path();
         expect(TokenKind::Semicolon, "expected ';' after module declaration");
     }
 
@@ -684,9 +684,18 @@ ast::Module Parser::parse_module() {
                 continue;
             }
         }
-        throw DiagnosticError("expected top-level declaration (func, struct, "
-                              "class, enum, impl, trait, type)",
-                              peek().line, peek().column);
+        if (peek().kind == TokenKind::Extern) {
+            advance();
+            if (peek().kind == TokenKind::Keyword && peek().lexeme == "func") {
+                module.functions.push_back(parse_function(visibility, false, true));
+                continue;
+            }
+            throw DiagnosticError("expected 'func' after 'extern'", peek().line, peek().column);
+        }
+        throw DiagnosticError(
+            "expected top-level declaration, found: " + std::string(to_string(peek().kind)) +
+                " ('" + peek().lexeme + "')",
+            peek().line, peek().column);
     }
 
     return module;
@@ -699,27 +708,34 @@ ast::Module Parser::parse_module() {
 ast::Import Parser::parse_import() {
     expect(TokenKind::Keyword, "expected 'import'");
 
-    std::string path = expect(TokenKind::Identifier, "expected module name").lexeme;
-    while (match(TokenKind::ColonColon)) {
-        path += "::";
-        path += expect(TokenKind::Identifier, "expected name after '::'").lexeme;
-    }
+    std::string path = parse_module_path();
 
     expect(TokenKind::Semicolon, "expected ';' after import");
 
     return ast::Import{std::move(path)};
 }
 
+std::string Parser::parse_module_path() {
+    std::string path = expect(TokenKind::Identifier, "expected module name").lexeme;
+    while (match(TokenKind::ColonColon)) {
+        path += "::";
+        path += expect(TokenKind::Identifier, "expected name after '::'").lexeme;
+    }
+    return path;
+}
+
 /* =======================
    Function
    ======================= */
 
-ast::FunctionDecl Parser::parse_function(ast::Visibility visibility, bool is_async) {
+ast::FunctionDecl Parser::parse_function(ast::Visibility visibility, bool is_async,
+                                         bool is_external) {
     expect(TokenKind::Keyword, "expected 'func'");
 
     ast::FunctionDecl fn;
     fn.visibility = visibility;
     fn.is_async = is_async;
+    fn.is_external = is_external;
     fn.name = expect(TokenKind::Identifier, "expected function name").lexeme;
     fn.type_params = parse_type_params();
 

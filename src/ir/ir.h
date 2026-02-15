@@ -356,6 +356,7 @@ struct IRFunction {
     BasicBlock* entry = nullptr;
 
     bool is_async = false;
+    bool is_external = false;
 
     // Source location
     uint32_t line = 0;

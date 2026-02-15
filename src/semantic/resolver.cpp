@@ -1670,14 +1670,28 @@ void Resolver::initialize_intrinsics() {
                              {"E"}});
 }
 
-void Resolver::resolve(const ast::Module& module) {
+void Resolver::resolve(const std::vector<ast::Module*>& modules) {
     initialize_intrinsics();
-    enter_scope(); // Module scope
-    resolve_module(module);
+    enter_scope(); // Root scope for all modules
 
-    // Monomorphization pass (Phase 2)
+    // Pass 1: Declare all entities in all modules
+    for (const auto* module : modules) {
+        declare_module(*module);
+    }
+
+    // Pass 2: Resolve all bodies in all modules
+    for (const auto* module : modules) {
+        resolve_module_bodies(*module);
+    }
+
+    // Pass 3: Monomorphization
     monomorphize_recursive();
     exit_scope();
+}
+
+void Resolver::resolve(const ast::Module& module) {
+    std::vector<ast::Module*> modules = {const_cast<ast::Module*>(&module)};
+    resolve(modules);
 }
 
 /* =======================
@@ -1685,10 +1699,23 @@ void Resolver::resolve(const ast::Module& module) {
    ======================= */
 
 void Resolver::resolve_module(const ast::Module& module) {
+    declare_module(module);
+    resolve_module_bodies(module);
+}
+
+void Resolver::declare_module(const ast::Module& module) {
     current_module_name_ = module.name;
     // Declare imports
     for (const auto& imp : module.imports) {
         std::string root_path = imp.module_path;
+
+        // Store alias mapping: "std::io" -> alias "io" maps to "std::io"
+        std::string alias = imp.module_path;
+        if (auto apos = alias.rfind("::"); apos != std::string::npos) {
+            alias = alias.substr(apos + 2);
+        }
+        module_aliases_[current_module_name_][alias] = imp.module_path;
+
         const auto pos = root_path.find("::");
         if (pos != std::string::npos) {
             root_path = root_path.substr(0, pos);
@@ -1982,9 +2009,10 @@ void Resolver::resolve_module(const ast::Module& module) {
             Symbol qualified = sym;
             qualified.name = current_module_name_ + "::" + fn.name;
             all_scopes_[0]->declare(qualified);
+            function_decls_[qualified.name] = &fn;
+        } else {
+            function_decls_[fn.name] = &fn;
         }
-
-        function_decls_[fn.name] = &fn;
     }
 
     // Declare impl methods (forward visibility) and register trait impls
@@ -2203,8 +2231,10 @@ void Resolver::resolve_module(const ast::Module& module) {
             function_decls_[qualified_name] = &method;
         }
     }
+}
 
-    // Resolve function bodies
+void Resolver::resolve_module_bodies(const ast::Module& module) {
+    current_module_name_ = module.name;
     for (const auto& fn : module.functions) {
         resolve_function(fn);
     }
@@ -2240,8 +2270,11 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& 
     }
 
     ScopeGuard guard(this);
-    bool old_async = is_in_async_context_;
     is_in_async_context_ = fn.is_async;
+
+    if (fn.is_external) {
+        return;
+    }
 
     current_function_return_type_ = type_from_name(fn.return_type);
     in_loop_ = false;
@@ -3759,6 +3792,34 @@ void Resolver::intersect_initialization_state(
             sym->is_initialized = false;
         }
     }
+}
+
+std::string Resolver::resolve_name(const std::string& name, const std::string& module_name) const {
+    const std::string& search_module = module_name.empty() ? current_module_name_ : module_name;
+
+    // Check module aliases
+    if (module_aliases_.count(search_module)) {
+        const auto& aliases = module_aliases_.at(search_module);
+        size_t pos = name.find("::");
+        if (pos != std::string::npos) {
+            std::string prefix = name.substr(0, pos);
+            if (aliases.count(prefix)) {
+                return aliases.at(prefix) + name.substr(pos);
+            }
+        }
+    }
+
+    if (current_scope_) {
+        if (const Symbol* sym = current_scope_->lookup(name)) {
+            return sym->name;
+        }
+    }
+    if (!all_scopes_.empty()) {
+        if (const Symbol* sym = all_scopes_[0]->lookup(name)) {
+            return sym->name;
+        }
+    }
+    return name;
 }
 
 } // namespace flux::semantic

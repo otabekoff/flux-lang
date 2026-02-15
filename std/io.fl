@@ -1,0 +1,16 @@
+module std::io;
+
+extern func printf(fmt: String, val: Int32) -> Int32;
+extern func puts(s: String) -> Int32;
+
+pub func println(s: String) {
+    puts(s);
+}
+
+pub func println_int(val: Int32) {
+    printf("%d\n", val);
+}
+
+pub func print_int(val: Int32) {
+    printf("%d", val);
+}

@@ -36,6 +36,7 @@ add_library(flux_core
     src/ast/ast_printer.cpp
     src/semantic/resolver.cpp
     src/semantic/monomorphizer.cpp
+    src/driver/module_loader.cpp
     src/ir/ir_builder.cpp
     src/ir/ir_lowering.cpp
     src/ir/ir_printer.cpp

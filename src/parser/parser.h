@@ -38,9 +38,10 @@ class Parser {
        Grammar constructs
        ======================= */
     ast::Import parse_import();
+    std::string parse_module_path();
 
     ast::FunctionDecl parse_function(ast::Visibility visibility = ast::Visibility::None,
-                                     bool is_async = false);
+                                     bool is_async = false, bool is_external = false);
 
     ast::StructDecl parse_struct_declaration(ast::Visibility visibility = ast::Visibility::None);
     ast::ClassDecl parse_class_declaration(ast::Visibility visibility = ast::Visibility::None);

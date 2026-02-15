@@ -218,6 +218,8 @@ std::vector<Token> Lexer::tokenize() {
                 kind = TokenKind::Public;
             else if (ident == "private")
                 kind = TokenKind::Private;
+            else if (ident == "extern")
+                kind = TokenKind::Extern;
             else if (keywords.contains(ident))
                 kind = TokenKind::Keyword;
 
