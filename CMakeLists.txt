@@ -36,6 +36,11 @@ add_library(flux_core
     src/ast/ast_printer.cpp
     src/semantic/resolver.cpp
     src/semantic/monomorphizer.cpp
+    src/ir/ir_builder.cpp
+    src/ir/ir_lowering.cpp
+    src/ir/ir_printer.cpp
+    src/ir/passes/constant_folding.cpp
+    src/ir/passes/dead_code_elimination.cpp
 )
 
 target_include_directories(flux_core PUBLIC
@@ -94,6 +99,7 @@ add_flux_test(error_handling)
 add_flux_test(ownership_borrowing)
 add_flux_test(concurrency)
 add_flux_test(hardening_phase1)
+add_flux_test(ir_basic)
 
 
 # By this what we've earned?

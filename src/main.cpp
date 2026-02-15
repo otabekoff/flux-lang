@@ -13,6 +13,13 @@
 
 #include "semantic/monomorphizer.h"
 
+// IR
+#include "ir/ir_lowering.h"
+#include "ir/ir_pass.h"
+#include "ir/ir_printer.h"
+#include "ir/passes/constant_folding.h"
+#include "ir/passes/dead_code_elimination.h"
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "flux: no input file\n";
@@ -20,6 +27,14 @@ int main(int argc, char** argv) {
     }
 
     const char* const path = argv[1];
+    bool emit_ir = false;
+
+    // Parse flags
+    for (int i = 2; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--emit-ir")
+            emit_ir = true;
+    }
 
     std::ifstream file(path);
     if (!file) {
@@ -52,9 +67,26 @@ int main(int argc, char** argv) {
         std::cout << "Monomorphization OK. Specialized functions generated: "
                   << (monomorphized_module.functions.size() - module.functions.size()) << "\n";
 
-        // Optional: Print monomorphized AST
-        // flux::ast::ASTPrinter printer;
-        // printer.print(monomorphized_module);
+        // IR Lowering
+        std::cout << "Lowering to IR...\n";
+        flux::ir::IRLowering lowering;
+        auto ir_module = lowering.lower(monomorphized_module);
+
+        std::cout << "IR lowering OK. Functions: " << ir_module.functions.size() << "\n";
+
+        // IR Optimization Passes
+        std::cout << "Running IR passes...\n";
+        std::vector<std::unique_ptr<flux::ir::IRPass>> passes;
+        passes.push_back(std::make_unique<flux::ir::ConstantFoldingPass>());
+        passes.push_back(std::make_unique<flux::ir::DeadCodeEliminationPass>());
+        int modified = flux::ir::run_passes(ir_module, passes);
+        std::cout << "IR passes complete. Passes that modified IR: " << modified << "\n";
+
+        // Emit IR if requested
+        if (emit_ir) {
+            flux::ir::IRPrinter printer;
+            printer.print(ir_module, std::cout);
+        }
 
     } catch (const flux::DiagnosticError& e) {
         std::cerr << e.what() << '\n';
@@ -63,13 +95,6 @@ int main(int argc, char** argv) {
         std::cerr << "Internal error: " << e.what() << '\n';
         return 1;
     }
-
-    // TODO:
-    // 1. read source
-    // 2. lex
-    // 3. parse
-    // 4. analyze
-    // 5. generate code
 
     return 0;
 }

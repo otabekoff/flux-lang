@@ -23,9 +23,9 @@ Flux follows semantic versioning for released stable versions. During active dev
 
 The Flux compiler frontend is largely complete at the **syntax** level. The lexer tokenizes all specified operators and keywords; the parser produces a full AST for modules, functions, structs, enums, traits, impls, generics, pattern matching, ownership syntax, async/await, annotations, and control flow. A basic semantic resolver performs scope-based name resolution, simple type checking, and match exhaustiveness analysis.
 
-**What works today:** parsing and semantic analysis of `.fl` source files; all 12 example programs pass.
+**What works today:** parsing, semantic analysis, and **IR generation** of `.fl` source files; all 30 test suite executables pass.
 
-**What does not exist yet:** code generation, IR, runtime, standard library, module/file resolution, borrow checking, advanced generics, testing infrastructure, and all tooling.
+**What does not exist yet:** native code generation, runtime, standard library, module/file resolution, advanced borrow checking, and builder tooling.
 
 ---
 
@@ -101,13 +101,12 @@ Complete the resolver so that every language feature described in the spec is fu
 - [x] **`async` function validation** — async functions are tracked via `is_async` on `Symbol`; future-like return type enforcement deferred to codegen.
 - [x] **`await` context checking** — `await` is only valid inside an `async` function. Tested in `concurrency.cpp`.
 - [x] **`spawn` validation** — spawned expression must be `async` or a callable. Tested in `concurrency.cpp`.
-- [ ] **`Send`/`Sync` marker traits** — prevent non-thread-safe data from crossing spawn boundaries. (Deferred to Phase 7: Runtime & Concurrency)
 - [x] **CompoundAssignStmt resolution (Bug #15)** — `+=`, `-=`, etc. are validated for numeric types.
 - [x] **Source location accuracy (Bug #12)** — parser captures line/column for all AST nodes; resolver uses them in diagnostics.
 
 - [x] Review all of the phase 1 tasks are completed fully or anything missing. Check everything. Build fresh and run tests. Make sure everything is working and completed fully. If anything missing, not done, not implemented, not completed or partially done about phase 1 tasks, then append as the new tasks to the phase 1 in ROADMAP.md.
 
-> **Phase 1 Review Result (February 2026):** Clean build succeeded. All 28 test executables pass (0 failures). Fixed `control_flow.exe` crash caused by null `initializer` dereference in `LetStmt` resolution. `Send`/`Sync` marker traits deferred to Phase 7 (Runtime & Concurrency) as they require runtime support.
+> **Phase 1 Review Result (February 2026):** Clean build succeeded. All 28 test executables pass (0 failures). Fixed `control_flow.exe` crash caused by null `initializer` dereference in `LetStmt` resolution.
 
 ---
 
@@ -115,13 +114,15 @@ Complete the resolver so that every language feature described in the spec is fu
 
 Design and implement a lowered IR suitable for optimization and code generation.
 
-- [ ] **Define Flux IR** — a typed, SSA-based IR with basic blocks, phi nodes, and explicit control flow.
-- [ ] **AST-to-IR lowering** — translate every AST node into IR instructions.
+- [x] **Define Flux IR** — a typed, SSA-based IR with basic blocks, phi nodes, and explicit control flow.
+- [x] **AST-to-IR lowering** — translate every AST node into IR instructions.
 - [ ] **IR validation pass** — verify IR well-formedness (type consistency, dominator tree, etc.).
-- [ ] **IR pretty-printer** — human-readable IR dump for debugging (`--emit-ir` flag).
-- [ ] **Constant folding** — evaluate compile-time constant expressions.
-- [ ] **Dead code elimination** — remove unreachable IR blocks.
+- [x] **IR pretty-printer** — human-readable IR dump for debugging (`--emit-ir` flag).
+- [x] **Constant folding** — evaluate compile-time constant expressions.
+- [x] **Dead code elimination** — remove unreachable IR blocks.
 - [ ] **Inlining heuristics** — inline small functions, `@inline`-annotated functions.
+
+> **Phase 2 Review Result (February 2026):** IR implementation complete. Core types, builder, lowering, and basic optimization passes (DCE, Constant Folding) are working. All 30 tests pass, including the new `ir_basic` test suite.
 
 ---
 
@@ -276,6 +277,7 @@ Implement the core types and functions referenced in the language spec.
 - [ ] **Channels** — `Channel<T>` for message-passing between spawned tasks.
 - [ ] **Mutex/RwLock** — synchronization primitives.
 - [ ] **Thread support** — OS-level threads when `spawn` targets `unsafe` threading.
+- [ ] **`Send`/`Sync` marker traits** — prevent non-thread-safe data from crossing spawn boundaries.
 
 ---
 
