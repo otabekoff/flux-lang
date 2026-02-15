@@ -12,6 +12,8 @@ namespace flux::ast {
 enum class Visibility { None, Public, Private };
 
 struct Node {
+    uint32_t line = 0;
+    uint32_t column = 0;
     virtual ~Node() = default;
     virtual std::unique_ptr<Node> clone() const = 0;
 };

@@ -304,12 +304,12 @@ Implement the core types and functions referenced in the language spec.
 
 | #   | Issue                                                                                        | File(s)                        | Status |
 | --- | -------------------------------------------------------------------------------------------- | ------------------------------ | ------ |
-| 1   | Field access (`point.x`) returns `Unknown` type — no struct field type lookup in `type_of()` | `resolver.cpp`                 | Open   |
-| 2   | Method call resolution (`obj.method()`) returns `Unknown` — no method dispatch               | `resolver.cpp`                 | Open   |
-| 3   | Index expression (`arr[i]`) returns `Unknown` — no element type propagation                  | `resolver.cpp`                 | Open   |
+| 1   | Field access (`point.x`) returns `Unknown` type — no struct field type lookup in `type_of()` | `resolver.cpp`                 | Fixed  |
+| 2   | Method call resolution (`obj.method()`) returns `Unknown` — no method dispatch               | `resolver.cpp`                 | Fixed  |
+| 3   | Index expression (`arr[i]`) returns `Unknown` — no element type propagation                  | `resolver.cpp`                 | Fixed  |
 | 4   | No type inference — `let x = 42;` requires explicit `: Int32`                                | `resolver.cpp`                 | Open   |
-| 5   | `where` clauses are parsed but not enforced                                                  | `resolver.cpp`                 | Open   |
-| 6   | Trait conformance is not checked — `impl Display for Point` methods aren't validated         | `resolver.cpp`                 | Open   |
+| 5   | `where` clauses are parsed but not enforced                                                  | `resolver.cpp`                 | Fixed  |
+| 6   | Trait conformance is not checked — `impl Display for Point` methods aren't validated         | `resolver.cpp`                 | Fixed  |
 | 7   | `pub`/`private` visibility parsed but not enforced                                           | `resolver.cpp`                 | Fixed  |
 | 8   | `?` error propagation parsed but not semantically checked                                    | `resolver.cpp`                 | Open   |
 | 9   | `unsafe` keyword recognized but not semantically modeled                                     | `resolver.cpp`                 | Open   |

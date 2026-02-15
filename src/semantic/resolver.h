@@ -153,6 +153,13 @@ struct Resolver {
 
     bool in_loop_ = false;
     bool break_found_ = false;
+    bool is_in_async_context_ = false;
+
+    // For diagnostics
+    struct SourceLoc {
+        uint32_t line = 0;
+        uint32_t column = 0;
+    } last_loc_;
 
     std::unordered_map<std::string, std::vector<std::string>> enum_variants_;
 

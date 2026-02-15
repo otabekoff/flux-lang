@@ -263,3 +263,4 @@ $tests = Get-ChildItem "build\Debug\*.exe" | Where-Object { $_.Name -notin @("fl
 ctest -C Debug --output-on-failure
 
 ---
+ cmake --build build --config Debug && .\build\Debug\concurrency.exe && .\build\Debug\hardening_phase1.exe && .\build\Debug\move_semantics.exe

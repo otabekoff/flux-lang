@@ -23,6 +23,7 @@ struct Symbol {
     std::string borrowed_symbol_name;
     uint32_t scope_depth = 0;
     ast::Visibility visibility = ast::Visibility::None;
+    bool is_async = false;
     std::string module_name;
 
     // For variables: declared type name (e.g. "Int32")
@@ -36,11 +37,11 @@ struct Symbol {
     Symbol(std::string name, SymbolKind kind, bool mut = false, bool is_const = false,
            bool moved = false, bool initialized = false,
            ast::Visibility vis = ast::Visibility::None, std::string mod = "", std::string t = "",
-           std::vector<std::string> params = {})
+           std::vector<std::string> params = {}, bool async_fn = false)
         : name(std::move(name)), kind(kind), is_mutable(mut), is_const(is_const), is_moved(moved),
           is_initialized(initialized), borrow_count(0), is_mutably_borrowed(false),
-          borrowed_symbol_name(""), scope_depth(0), visibility(vis), module_name(std::move(mod)),
-          type(std::move(t)), param_types(std::move(params)) {}
+          borrowed_symbol_name(""), scope_depth(0), visibility(vis), is_async(async_fn),
+          module_name(std::move(mod)), type(std::move(t)), param_types(std::move(params)) {}
 };
 } // namespace flux::semantic
 

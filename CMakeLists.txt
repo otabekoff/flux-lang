@@ -92,6 +92,8 @@ add_flux_test(pattern_matching)
 add_flux_test(control_flow)
 add_flux_test(error_handling)
 add_flux_test(ownership_borrowing)
+add_flux_test(concurrency)
+add_flux_test(hardening_phase1)
 
 
 # By this what we've earned?

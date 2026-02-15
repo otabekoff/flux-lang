@@ -123,6 +123,7 @@ ast::ExprPtr Parser::parse_primary() {
     ast::ExprPtr expr;
     // Lambda/closure: |params| -> RetType { body }
     if (tok.kind == TokenKind::Pipe) {
+        Token start = tok;
         advance(); // consume '|'
         std::vector<ast::LambdaExpr::Param> params;
         // Parse parameter list
@@ -151,13 +152,17 @@ ast::ExprPtr Parser::parse_primary() {
         expect(TokenKind::LBrace, "expected '{' to start lambda body");
         ast::ExprPtr body = parse_expression(); // For now, parse a single expression as body
         expect(TokenKind::RBrace, "expected '}' after lambda body");
-        return std::make_unique<ast::LambdaExpr>(std::move(params), std::move(ret_type),
-                                                 std::move(body));
+        auto lambda = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(ret_type),
+                                                        std::move(body));
+        lambda->line = start.line;
+        lambda->column = start.column;
+        return lambda;
     }
 
     // Unary operators
     if (tok.kind == TokenKind::Minus || tok.kind == TokenKind::Bang || tok.kind == TokenKind::Amp ||
         tok.kind == TokenKind::Tilde) {
+        Token start = tok;
         const TokenKind op = tok.kind;
         advance();
 
@@ -165,22 +170,33 @@ ast::ExprPtr Parser::parse_primary() {
         if (op == TokenKind::Amp && peek().kind == TokenKind::Keyword && peek().lexeme == "mut") {
             advance(); // consume 'mut'
             ast::ExprPtr operand = this->parse_expression(50);
-            return std::make_unique<ast::UnaryExpr>(op, std::move(operand), true);
+            auto unary = std::make_unique<ast::UnaryExpr>(op, std::move(operand), true);
+            unary->line = start.line;
+            unary->column = start.column;
+            return unary;
         }
 
         ast::ExprPtr operand = this->parse_expression(50); // higher than any binary
-        return std::make_unique<ast::UnaryExpr>(op, std::move(operand), false);
+        auto unary = std::make_unique<ast::UnaryExpr>(op, std::move(operand), false);
+        unary->line = start.line;
+        unary->column = start.column;
+        return unary;
     }
 
     // 'not' keyword as unary
     if (tok.kind == TokenKind::Keyword && tok.lexeme == "not") {
+        Token start = tok;
         advance();
         ast::ExprPtr operand = this->parse_expression(50);
-        return std::make_unique<ast::UnaryExpr>(TokenKind::Bang, std::move(operand));
+        auto unary = std::make_unique<ast::UnaryExpr>(TokenKind::Bang, std::move(operand));
+        unary->line = start.line;
+        unary->column = start.column;
+        return unary;
     }
 
     // Grouping or tuple: ( expression ) or (expr1, expr2, ...)
     if (tok.kind == TokenKind::LParen) {
+        Token start = tok;
         advance(); // consume '('
         std::vector<ast::ExprPtr> elements;
         if (peek().kind != TokenKind::RParen) {
@@ -192,12 +208,18 @@ ast::ExprPtr Parser::parse_primary() {
         expect(TokenKind::RParen, "expected ')' after tuple or grouping");
         if (elements.size() == 1) {
             expr = std::move(elements[0]);
+            // inherit location from inner expr? or set () location?
+            // Usually grouping preserves inner expr location.
         } else {
-            expr = std::make_unique<ast::TupleExpr>(std::move(elements));
+            auto tuple = std::make_unique<ast::TupleExpr>(std::move(elements));
+            tuple->line = start.line;
+            tuple->column = start.column;
+            expr = std::move(tuple);
         }
     }
     // Array literal: [expr1, expr2, ...]
     else if (tok.kind == TokenKind::LBracket) {
+        Token start = tok;
         advance(); // consume '['
         std::vector<ast::ExprPtr> elements;
         if (peek().kind != TokenKind::RBracket) {
@@ -208,32 +230,55 @@ ast::ExprPtr Parser::parse_primary() {
         }
         expect(TokenKind::RBracket, "expected ']' after array literal");
         expr = std::make_unique<ast::ArrayExpr>(std::move(elements));
+        expr->line = start.line;
+        expr->column = start.column;
     }
     // Literals
     else if (tok.kind == TokenKind::Number) {
+        Token start = tok;
         advance();
         expr = std::make_unique<ast::NumberExpr>(tok.lexeme);
+        expr->line = start.line;
+        expr->column = start.column;
     } else if (tok.kind == TokenKind::String) {
+        Token start = tok;
         advance();
         expr = std::make_unique<ast::StringExpr>(tok.lexeme);
+        expr->line = start.line;
+        expr->column = start.column;
     } else if (tok.kind == TokenKind::Char) {
+        Token start = tok;
         advance();
         expr = std::make_unique<ast::CharExpr>(tok.lexeme);
+        expr->line = start.line;
+        expr->column = start.column;
     }
     // Move
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "move") {
+        Token start = tok;
         advance();
-        return std::make_unique<ast::MoveExpr>(this->parse_expression(50));
+        auto mv = std::make_unique<ast::MoveExpr>(this->parse_expression(50));
+        mv->line = start.line;
+        mv->column = start.column;
+        return mv;
     }
     // await
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "await") {
+        Token start = tok;
         advance();
-        return std::make_unique<ast::AwaitExpr>(this->parse_expression(50));
+        auto aw = std::make_unique<ast::AwaitExpr>(this->parse_expression(50));
+        aw->line = start.line;
+        aw->column = start.column;
+        return aw;
     }
     // spawn
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "spawn") {
+        Token start = tok;
         advance();
-        return std::make_unique<ast::SpawnExpr>(this->parse_expression(50));
+        auto sp = std::make_unique<ast::SpawnExpr>(this->parse_expression(50));
+        sp->line = start.line;
+        sp->column = start.column;
+        return sp;
     }
     // drop
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "drop") {
@@ -247,7 +292,9 @@ ast::ExprPtr Parser::parse_primary() {
         expr = std::make_unique<ast::CallExpr>(std::move(callee), std::move(args));
     }
     // panic
+    // panic
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "panic") {
+        Token start = tok;
         advance();
         expect(TokenKind::LParen, "expected '(' after 'panic'");
         auto arg = parse_expression();
@@ -255,10 +302,14 @@ ast::ExprPtr Parser::parse_primary() {
         auto callee = std::make_unique<ast::IdentifierExpr>("panic");
         std::vector<ast::ExprPtr> args;
         args.push_back(std::move(arg));
-        expr = std::make_unique<ast::CallExpr>(std::move(callee), std::move(args));
+        auto call = std::make_unique<ast::CallExpr>(std::move(callee), std::move(args));
+        call->line = start.line;
+        call->column = start.column;
+        expr = std::move(call);
     }
     // assert
     else if (tok.kind == TokenKind::Keyword && tok.lexeme == "assert") {
+        Token start = tok;
         advance();
         expect(TokenKind::LParen, "expected '(' after 'assert'");
         auto arg = parse_expression();
@@ -266,30 +317,48 @@ ast::ExprPtr Parser::parse_primary() {
         auto callee = std::make_unique<ast::IdentifierExpr>("assert");
         std::vector<ast::ExprPtr> args;
         args.push_back(std::move(arg));
-        expr = std::make_unique<ast::CallExpr>(std::move(callee), std::move(args));
+        auto call = std::make_unique<ast::CallExpr>(std::move(callee), std::move(args));
+        call->line = start.line;
+        call->column = start.column;
+        expr = std::move(call);
     }
     // Keywords (true/false/self/Self)
     else if (tok.kind == TokenKind::Keyword) {
         if (tok.lexeme == "true") {
+            Token start = tok;
             advance();
             expr = std::make_unique<ast::BoolExpr>(true);
+            expr->line = start.line;
+            expr->column = start.column;
         } else if (tok.lexeme == "false") {
+            Token start = tok;
             advance();
             expr = std::make_unique<ast::BoolExpr>(false);
+            expr->line = start.line;
+            expr->column = start.column;
         } else if (tok.lexeme == "self") {
+            Token start = tok;
             advance();
             expr = std::make_unique<ast::IdentifierExpr>("self");
+            expr->line = start.line;
+            expr->column = start.column;
         } else if (tok.lexeme == "Self") {
+            Token start = tok;
             advance();
             expr = std::make_unique<ast::IdentifierExpr>("Self");
+            expr->line = start.line;
+            expr->column = start.column;
         } else {
             throw DiagnosticError("expected expression", tok.line, tok.column);
         }
     }
     // Identifiers
     else if (tok.kind == TokenKind::Identifier) {
+        Token start = tok;
         advance();
         expr = std::make_unique<ast::IdentifierExpr>(tok.lexeme);
+        expr->line = start.line;
+        expr->column = start.column;
     } else {
         throw DiagnosticError("expected expression", tok.line, tok.column);
     }
@@ -297,6 +366,8 @@ ast::ExprPtr Parser::parse_primary() {
     // Suffixes: ::, ., (, {, ?, as, [, slice
     while (true) {
         if (match(TokenKind::ColonColon)) {
+            uint32_t line = expr->line;
+            uint32_t col = expr->column;
             std::string member =
                 expect(TokenKind::Identifier, "expected member name after '::'").lexeme;
             if (peek().kind == TokenKind::Less) {
@@ -324,9 +395,15 @@ ast::ExprPtr Parser::parse_primary() {
                 if (!is_generic)
                     current_ = saved;
             }
-            expr = std::make_unique<ast::BinaryExpr>(TokenKind::ColonColon, std::move(expr),
-                                                     std::make_unique<ast::IdentifierExpr>(member));
+            auto bin =
+                std::make_unique<ast::BinaryExpr>(TokenKind::ColonColon, std::move(expr),
+                                                  std::make_unique<ast::IdentifierExpr>(member));
+            bin->line = line;
+            bin->column = col;
+            expr = std::move(bin);
         } else if (match(TokenKind::Dot)) {
+            uint32_t line = expr->line;
+            uint32_t col = expr->column;
             std::string member =
                 expect(TokenKind::Identifier, "expected member name after '.'").lexeme;
             if (peek().kind == TokenKind::Less) {
@@ -352,9 +429,14 @@ ast::ExprPtr Parser::parse_primary() {
                 if (!is_generic)
                     current_ = saved;
             }
-            expr = std::make_unique<ast::BinaryExpr>(TokenKind::Dot, std::move(expr),
-                                                     std::make_unique<ast::IdentifierExpr>(member));
+            auto bin = std::make_unique<ast::BinaryExpr>(
+                TokenKind::Dot, std::move(expr), std::make_unique<ast::IdentifierExpr>(member));
+            bin->line = line;
+            bin->column = col;
+            expr = std::move(bin);
         } else if (match(TokenKind::LParen)) {
+            uint32_t line = expr->line;
+            uint32_t col = expr->column;
             std::vector<ast::ExprPtr> args;
             if (peek().kind != TokenKind::RParen) {
                 do {
@@ -362,13 +444,26 @@ ast::ExprPtr Parser::parse_primary() {
                 } while (match(TokenKind::Comma));
             }
             expect(TokenKind::RParen, "expected ')' after arguments");
-            expr = std::make_unique<ast::CallExpr>(std::move(expr), std::move(args));
+            auto call = std::make_unique<ast::CallExpr>(std::move(expr), std::move(args));
+            call->line = line;
+            call->column = col;
+            expr = std::move(call);
         } else if (match(TokenKind::Question)) {
             // Error propagation: expr?
-            expr = std::make_unique<ast::ErrorPropagationExpr>(std::move(expr));
+            uint32_t line = expr->line;
+            uint32_t col = expr->column;
+            auto prop = std::make_unique<ast::ErrorPropagationExpr>(std::move(expr));
+            prop->line = line;
+            prop->column = col;
+            expr = std::move(prop);
         } else if (peek().kind == TokenKind::Less) {
             // Ambiguity: generic or less-than?
+            // If it is generic, we replace expr with a new identifier?
+            // Wait, this logic (lines 416-444) replaces expr if it's an IdentifierExpr.
+            // If it replaces expr, the new expr should start at same location as old expr.
             if (auto* id = dynamic_cast<ast::IdentifierExpr*>(expr.get())) {
+                uint32_t line = expr->line;
+                uint32_t col = expr->column;
                 std::string type = id->name;
                 std::size_t saved = current_;
                 advance(); // <
@@ -389,9 +484,10 @@ ast::ExprPtr Parser::parse_primary() {
                 } catch (...) {
                     is_generic = false;
                 }
-
                 if (is_generic) {
                     expr = std::make_unique<ast::IdentifierExpr>(type);
+                    expr->line = line;
+                    expr->column = col;
                 } else {
                     current_ = saved;
                     break;
@@ -403,6 +499,12 @@ ast::ExprPtr Parser::parse_primary() {
                    (peek(1).kind == TokenKind::RBrace ||
                     (peek(1).kind == TokenKind::Identifier && peek(2).kind == TokenKind::Colon))) {
             // Struct literal: { } or { ident :
+            // This parses a StructLiteral.
+            // It uses `struct_name` from expr (identifier) or default.
+            // `expr` is consumed.
+            // The StructLiteral should start at `expr` location.
+            uint32_t line = expr->line;
+            uint32_t col = expr->column;
             advance(); // consume '{'
             std::vector<ast::FieldInit> fields;
             while (!match(TokenKind::RBrace)) {
@@ -421,13 +523,23 @@ ast::ExprPtr Parser::parse_primary() {
                 struct_name = "<qualified-name>";
             }
 
-            expr = std::make_unique<ast::StructLiteralExpr>(struct_name, std::move(fields));
+            auto lit = std::make_unique<ast::StructLiteralExpr>(struct_name, std::move(fields));
+            lit->line = line;
+            lit->column = col;
+            expr = std::move(lit);
         } else if (peek().kind == TokenKind::Keyword && peek().lexeme == "as") {
+            uint32_t line = expr->line;
+            uint32_t col = expr->column;
             advance(); // consume 'as'
             std::string target_type = parse_type();
-            expr = std::make_unique<ast::CastExpr>(std::move(expr), target_type);
+            auto cast = std::make_unique<ast::CastExpr>(std::move(expr), target_type);
+            cast->line = line;
+            cast->column = col;
+            expr = std::move(cast);
         } else if (peek().kind == TokenKind::LBracket) {
             // Index or Slice: expr[idx] or expr[start:end]
+            uint32_t line = expr->line;
+            uint32_t col = expr->column;
             advance(); // consume '['
 
             // Check if it's a slice (starts with colon or has colon after expression)
@@ -449,14 +561,22 @@ ast::ExprPtr Parser::parse_primary() {
                     }
                 }
             }
-
             expect(TokenKind::RBracket, "expected ']' after index or slice");
 
             if (is_slice) {
-                expr = std::make_unique<ast::SliceExpr>(std::move(expr), std::move(start),
-                                                        std::move(end));
+                auto slice = std::make_unique<ast::SliceExpr>(std::move(expr), std::move(start),
+                                                              std::move(end));
+                slice->line = line;
+                slice->column = col;
+                expr = std::move(slice);
             } else {
-                expr = std::make_unique<ast::IndexExpr>(std::move(expr), std::move(start));
+                if (!start) {
+                    throw DiagnosticError("expected index expression", peek().line, peek().column);
+                }
+                auto index = std::make_unique<ast::IndexExpr>(std::move(expr), std::move(start));
+                index->line = line;
+                index->column = col;
+                expr = std::move(index);
             }
         } else {
             break;
@@ -491,7 +611,11 @@ ast::ExprPtr Parser::parse_expression(int min_prec) {
 
         ast::ExprPtr right = parse_expression(prec + 1);
 
+        uint32_t line = left->line;
+        uint32_t col = left->column;
         left = std::make_unique<ast::BinaryExpr>(op, std::move(left), std::move(right));
+        left->line = line;
+        left->column = col;
     }
 
     return left;
@@ -712,7 +836,10 @@ ast::StmtPtr Parser::parse_statement() {
     }
 
     if (peek().kind == TokenKind::LBrace) {
+        Token start = peek();
         auto block_stmt = std::make_unique<ast::BlockStmt>();
+        block_stmt->line = start.line;
+        block_stmt->column = start.column;
         block_stmt->block = parse_block();
         return block_stmt;
     }
@@ -741,24 +868,34 @@ ast::StmtPtr Parser::parse_statement() {
     }
 
     // Expression statement
+    Token start = peek();
     ast::ExprPtr expr = parse_expression();
 
     // Check for assignment after expression (for complex LHS targets)
     if (peek().kind == TokenKind::Assign || peek().kind == TokenKind::PlusAssign ||
         peek().kind == TokenKind::MinusAssign || peek().kind == TokenKind::StarAssign ||
-        peek().kind == TokenKind::SlashAssign || peek().kind == TokenKind::PercentAssign) {
-        TokenKind op = peek().kind;
+        peek().kind == TokenKind::SlashAssign) {
+
+        Token op_token = peek();
         advance();
         ast::ExprPtr value = parse_expression();
         expect(TokenKind::Semicolon, "expected ';' after assignment");
-        return std::make_unique<ast::AssignStmt>(std::move(expr), std::move(value), op);
+        auto stmt =
+            std::make_unique<ast::AssignStmt>(std::move(expr), std::move(value), op_token.kind);
+        stmt->line = start.line;
+        stmt->column = start.column;
+        return stmt;
     }
 
     expect(TokenKind::Semicolon, "expected ';' after expression");
-    return std::make_unique<ast::ExprStmt>(std::move(expr));
+    auto stmt = std::make_unique<ast::ExprStmt>(std::move(expr));
+    stmt->line = start.line;
+    stmt->column = start.column;
+    return stmt;
 }
 
 ast::StmtPtr Parser::parse_let_statement() {
+    Token start = peek();
     bool is_const = false;
     bool is_mutable = false;
 
@@ -793,16 +930,22 @@ ast::StmtPtr Parser::parse_let_statement() {
         initializer = parse_expression();
     }
     expect(TokenKind::Semicolon, "expected ';'");
+
+    std::unique_ptr<ast::LetStmt> stmt;
     if (!tuple_names.empty()) {
-        return std::make_unique<ast::LetStmt>(std::move(tuple_names), std::move(type_name),
+        stmt = std::make_unique<ast::LetStmt>(std::move(tuple_names), std::move(type_name),
                                               is_mutable, is_const, std::move(initializer));
     } else {
-        return std::make_unique<ast::LetStmt>(std::move(name), std::move(type_name), is_mutable,
+        stmt = std::make_unique<ast::LetStmt>(std::move(name), std::move(type_name), is_mutable,
                                               is_const, std::move(initializer));
     }
+    stmt->line = start.line;
+    stmt->column = start.column;
+    return stmt;
 }
 
 ast::StmtPtr Parser::parse_if_statement() {
+    Token start = peek();
     expect(TokenKind::Keyword, "expected 'if'");
     ast::ExprPtr condition = parse_expression();
     ast::StmtPtr then_branch = parse_statement();
@@ -813,8 +956,11 @@ ast::StmtPtr Parser::parse_if_statement() {
         else_branch = parse_statement();
     }
 
-    return std::make_unique<ast::IfStmt>(std::move(condition), std::move(then_branch),
-                                         std::move(else_branch));
+    auto stmt = std::make_unique<ast::IfStmt>(std::move(condition), std::move(then_branch),
+                                              std::move(else_branch));
+    stmt->line = start.line;
+    stmt->column = start.column;
+    return stmt;
 }
 
 ast::StmtPtr Parser::parse_while_statement() {
@@ -826,6 +972,7 @@ ast::StmtPtr Parser::parse_while_statement() {
 }
 
 ast::StmtPtr Parser::parse_for_statement() {
+    Token start = peek();
     expect(TokenKind::Keyword, "expected 'for'");
 
     std::string var_name = expect(TokenKind::Identifier, "expected loop variable name").lexeme;
@@ -843,18 +990,25 @@ ast::StmtPtr Parser::parse_for_statement() {
     ast::ExprPtr iterable = parse_expression();
     ast::StmtPtr body = parse_statement();
 
-    return std::make_unique<ast::ForStmt>(std::move(var_name), std::move(var_type),
-                                          std::move(iterable), std::move(body));
+    auto stmt = std::make_unique<ast::ForStmt>(std::move(var_name), std::move(var_type),
+                                               std::move(iterable), std::move(body));
+    stmt->line = start.line;
+    stmt->column = start.column;
+    return stmt;
 }
 
 ast::StmtPtr Parser::parse_loop_statement() {
+    Token start = peek();
     expect(TokenKind::Keyword, "expected 'loop'");
     ast::StmtPtr body = parse_statement();
-
-    return std::make_unique<ast::LoopStmt>(std::move(body));
+    auto stmt = std::make_unique<ast::LoopStmt>(std::move(body));
+    stmt->line = start.line;
+    stmt->column = start.column;
+    return stmt;
 }
 
 ast::StmtPtr Parser::parse_match_statement() {
+    Token start = peek();
     expect(TokenKind::Keyword, "expected 'match'");
     ast::ExprPtr expression = parse_expression();
     expect(TokenKind::LBrace, "expected '{' after match expression");
@@ -874,17 +1028,59 @@ ast::StmtPtr Parser::parse_match_statement() {
 
         ast::StmtPtr body;
         if (peek().kind == TokenKind::LBrace) {
+            Token body_start = peek();
             body = std::make_unique<ast::BlockStmt>();
+            body->line = body_start.line; // Wait, BlockStmt doesn't have line/col? It inherits from
+                                          // Stmt -> Node. Yes.
+            body->column = body_start.column;
             dynamic_cast<ast::BlockStmt*>(body.get())->block = parse_block();
         } else {
-            body = std::make_unique<ast::ExprStmt>(parse_expression());
+            body =
+                std::make_unique<ast::ExprStmt>(parse_expression()); // ExprStmt needs location too?
+            // Usually ExprStmt takes expression location? No, statement location.
+            // But parse_expression() returns expr with location.
+            // ExprStmt wraps it. Ideally ExprStmt has same location as Expr?
+            // Or start of Expr.
+            // I should capture start of expression.
+            // But parse_expression() consumes tokens.
+            // I can't easily peek start of expression without parse_expression returning location.
+            // But `body` here is StmtPtr.
+            // I can set `body->line` to `expression->line`?
+            // `Expr` inherits `Node` so it has `line`.
+            // Yes.
         }
+
+        // Let's refine the replacement.
+        // For BlockStmt, I can capture start.
+        // For ExprStmt, I can use expression's line/col?
+        // Or just omit for now inside match arm if too complex.
+
+        // Actually, for ExprStmt, let's try:
+        /*
+        if (peek().kind == TokenKind::LBrace) {
+             Token body_start = peek();
+             auto bs = std::make_unique<ast::BlockStmt>();
+             bs->line = body_start.line;
+             bs->column = body_start.column;
+             bs->block = parse_block();
+             body = std::move(bs);
+        } else {
+             Token body_start = peek();
+             auto es = std::make_unique<ast::ExprStmt>(parse_expression());
+             es->line = body_start.line;
+             es->column = body_start.column;
+             body = std::move(es);
+        }
+        */
 
         arms.push_back({std::move(pattern), std::move(guard), std::move(body)});
         match(TokenKind::Comma); // Optional comma after arm
     }
 
-    return std::make_unique<ast::MatchStmt>(std::move(expression), std::move(arms));
+    auto stmt = std::make_unique<ast::MatchStmt>(std::move(expression), std::move(arms));
+    stmt->line = start.line;
+    stmt->column = start.column;
+    return stmt;
 }
 
 ast::PatternPtr Parser::parse_pattern() {

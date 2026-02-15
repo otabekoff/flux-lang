@@ -15,7 +15,7 @@ void test_explicit_move() {
 
     // let a: String
     resolver.current_scope_->declare(
-        {"a", SymbolKind::Variable, false, false, false, Visibility::None, "", "String"});
+        {"a", SymbolKind::Variable, false, false, false, true, Visibility::None, "", "String"});
 
     // move a
     auto a_expr = std::make_unique<IdentifierExpr>("a");
@@ -43,7 +43,7 @@ void test_implicit_move_assignment() {
 
     // let a: String
     resolver.current_scope_->declare(
-        {"a", SymbolKind::Variable, false, false, false, Visibility::None, "", "String"});
+        {"a", SymbolKind::Variable, false, false, false, true, Visibility::None, "", "String"});
 
     // let b: String = a
     auto let = std::make_unique<LetStmt>("b", "String", false, false,
@@ -80,7 +80,7 @@ void test_copy_semantics() {
 
     // let i: Int32
     resolver.current_scope_->declare(
-        {"i", SymbolKind::Variable, false, false, false, Visibility::None, "", "Int32"});
+        {"i", SymbolKind::Variable, false, false, false, true, Visibility::None, "", "Int32"});
 
     // let j: Int32 = i
     auto let = std::make_unique<LetStmt>("j", "Int32", false, false,
@@ -103,7 +103,7 @@ void test_revival() {
 
     // let mut a: String
     resolver.current_scope_->declare(
-        {"a", SymbolKind::Variable, true, false, false, Visibility::None, "", "String"});
+        {"a", SymbolKind::Variable, true, false, false, true, Visibility::None, "", "String"});
 
     // move a (manually)
     auto a_expr = std::make_unique<IdentifierExpr>("a");
@@ -148,6 +148,7 @@ void test_implicit_move_call() {
                                       false,
                                       false,
                                       false,
+                                      true,
                                       Visibility::None,
                                       "",
                                       "Void",
@@ -155,7 +156,7 @@ void test_implicit_move_call() {
 
     // let a: String
     resolver.current_scope_->declare(
-        {"a", SymbolKind::Variable, false, false, false, Visibility::None, "", "String"});
+        {"a", SymbolKind::Variable, false, false, false, true, Visibility::None, "", "String"});
 
     // take(a)
     std::vector<ExprPtr> args;
@@ -196,9 +197,13 @@ void test_implicit_move_struct() {
 
     resolver.resolve(mod); // This clears scopes and sets up builtins
 
+    // Manually push 'Wrapper' into current_scope_ to simulate it being available
+    resolver.current_scope_->declare({"Wrapper", SymbolKind::Variable, false, true, false, true,
+                                      Visibility::Public, "", "FluxType"});
+
     // declare 'a'
     resolver.current_scope_->declare(
-        {"a", SymbolKind::Variable, false, false, false, Visibility::None, "", "String"});
+        {"a", SymbolKind::Variable, false, false, false, true, Visibility::None, "", "String"});
 
     // Wrapper { val: a }
     std::vector<FieldInit> fields;

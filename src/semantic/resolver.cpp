@@ -1533,6 +1533,10 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
         return type_from_name(sl->struct_name);
     }
 
+    // Track location for diagnostics
+    last_loc_.line = expr.line;
+    last_loc_.column = expr.column;
+
     if (auto ep = dynamic_cast<const ast::ErrorPropagationExpr*>(&expr)) {
         FluxType op_type = type_of(*ep->operand);
         if (op_type.kind == TypeKind::Option || op_type.kind == TypeKind::Result) {
@@ -1543,16 +1547,21 @@ FluxType Resolver::type_of(const ast::Expr& expr) {
         return op_type;
     }
 
-    if (dynamic_cast<const ast::AwaitExpr*>(&expr)) {
-        return unknown();
+    if (auto awt = dynamic_cast<const ast::AwaitExpr*>(&expr)) {
+        if (!is_in_async_context_) {
+            throw flux::DiagnosticError("'await' is only allowed inside an 'async' function",
+                                        (std::size_t)expr.line, (std::size_t)expr.column);
+        }
+        return type_of(*awt->operand);
     }
 
-    if (dynamic_cast<const ast::SpawnExpr*>(&expr)) {
-        return unknown();
+    if (auto spw = dynamic_cast<const ast::SpawnExpr*>(&expr)) {
+        return type_of(*spw->operand);
     }
 
     if (dynamic_cast<const ast::RangeExpr*>(&expr)) {
-        return unknown();
+        FluxType t(TypeKind::Struct, "Range");
+        return t;
     }
 
     return unknown();
@@ -1963,6 +1972,7 @@ void Resolver::resolve_module(const ast::Module& module) {
         sym.visibility = fn.visibility;
         sym.module_name = current_module_name_;
         sym.is_initialized = true;
+        sym.is_async = fn.is_async;
 
         if (!current_scope_->declare(sym)) {
             throw DiagnosticError("duplicate function '" + fn.name + "'", 0, 0);
@@ -2230,6 +2240,8 @@ void Resolver::resolve_function(const ast::FunctionDecl& fn, const std::string& 
     }
 
     ScopeGuard guard(this);
+    bool old_async = is_in_async_context_;
+    is_in_async_context_ = fn.is_async;
 
     current_function_return_type_ = type_from_name(fn.return_type);
     in_loop_ = false;
@@ -2297,7 +2309,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                 throw DiagnosticError("return type mismatch: expected '" +
                                           current_function_return_type_.name + "', got '" +
                                           returned.name + "'",
-                                      0, 0);
+                                      stmt.line, stmt.column);
             }
         } else if (current_function_return_type_.kind != TypeKind::Void) {
             throw DiagnosticError("returning void from non-void function", 0, 0);
@@ -2321,7 +2333,8 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
                               let_stmt->type_name.find('&') != std::string::npos ||
                               let_stmt->type_name.find('(') != std::string::npos;
             if (!is_complex && !current_scope_->lookup(let_stmt->type_name)) {
-                throw DiagnosticError("unknown type '" + let_stmt->type_name + "'", 0, 0);
+                throw DiagnosticError("unknown type '" + let_stmt->type_name + "'", stmt.line,
+                                      stmt.column);
             }
         }
 
@@ -2331,7 +2344,7 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
             throw DiagnosticError("cannot initialize variable '" + var_name + "' of type '" +
                                       declared_type.name + "' with value of type '" +
                                       init_type.name + "'",
-                                  0, 0);
+                                  stmt.line, stmt.column);
         }
 
         // 4. Declare symbol(s)
@@ -2339,14 +2352,14 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
             if (init_type.kind != TypeKind::Tuple) {
                 throw DiagnosticError("expected tuple type for destructuring let, found '" +
                                           init_type.name + "'",
-                                      0, 0);
+                                      stmt.line, stmt.column);
             }
             if (let_stmt->tuple_names.size() != init_type.generic_args.size()) {
                 throw DiagnosticError("destructuring pattern arity mismatch: expected " +
                                           std::to_string(init_type.generic_args.size()) +
                                           " variables, found " +
                                           std::to_string(let_stmt->tuple_names.size()),
-                                      0, 0);
+                                      stmt.line, stmt.column);
             }
             for (size_t i = 0; i < let_stmt->tuple_names.size(); ++i) {
                 if (!current_scope_->declare({let_stmt->tuple_names[i],
@@ -2432,53 +2445,62 @@ bool Resolver::resolve_statement(const ast::Stmt& stmt) {
         if (id) {
             Symbol* sym = current_scope_->lookup_mut(id->name);
             if (!sym) {
-                throw DiagnosticError("assignment to undeclared variable '" + id->name + "'", 0, 0);
+                throw DiagnosticError("assignment to undeclared variable '" + id->name + "'",
+                                      stmt.line, stmt.column);
             }
 
             if (sym->is_const && sym->is_initialized) {
-                throw DiagnosticError("cannot reassign to constant '" + id->name + "'", 0, 0);
+                throw DiagnosticError("cannot reassign to constant '" + id->name + "'", stmt.line,
+                                      stmt.column);
             }
 
             if (!sym->is_mutable && sym->is_initialized) {
-                throw DiagnosticError("cannot reassign to immutable variable '" + id->name + "'", 0,
-                                      0);
+                throw DiagnosticError("cannot reassign to immutable variable '" + id->name + "'",
+                                      stmt.line, stmt.column);
             }
-            sym->is_initialized = true;
 
             const FluxType lhs = type_from_name(sym->type);
+            resolve_expression(*asg->value);
+            FluxType val_type = type_of(*asg->value);
 
             if (asg->op == TokenKind::Assign) {
-                resolve_expression(*asg->value);
-                FluxType val_type = type_of(*asg->value);
-                if (!are_types_compatible(type_from_name(sym->type), val_type)) {
+                if (!are_types_compatible(lhs, val_type)) {
                     throw DiagnosticError("cannot assign type '" + val_type.name +
                                               "' to variable of type '" + sym->type + "'",
-                                          0, 0);
+                                          stmt.line, stmt.column);
                 }
-
-                // Revival: assigning to a moved variable makes it valid again
+                sym->is_initialized = true;
                 sym->is_moved = false;
+            } else {
+                // Compound assignment (+=, -=, etc.)
+                if (lhs.kind != TypeKind::Int && lhs.kind != TypeKind::Float) {
+                    throw DiagnosticError("compound assignment only allowed for numeric types",
+                                          stmt.line, stmt.column);
+                }
+                if (!are_types_compatible(lhs, val_type)) {
+                    throw DiagnosticError("type mismatch in compound assignment", stmt.line,
+                                          stmt.column);
+                }
+                if (sym->is_moved) {
+                    throw DiagnosticError("use of moved value '" + id->name + "'", stmt.line,
+                                          stmt.column);
+                }
+            }
 
-                // Implicit move for non-Copy types (source)
-                if (auto val_id = dynamic_cast<const ast::IdentifierExpr*>(asg->value.get())) {
-                    Symbol* source_sym = current_scope_->lookup_mut(val_id->name);
-                    if (source_sym && source_sym->kind == SymbolKind::Variable) {
-                        if (!is_copy_type(source_sym->type)) {
-                            source_sym->is_moved = true;
-                        }
+            // Implicit move for non-Copy types (source)
+            if (auto val_id = dynamic_cast<const ast::IdentifierExpr*>(asg->value.get())) {
+                Symbol* source_sym = current_scope_->lookup_mut(val_id->name);
+                if (source_sym && source_sym->kind == SymbolKind::Variable) {
+                    if (!is_copy_type(source_sym->type)) {
+                        source_sym->is_moved = true;
                     }
                 }
-            } else {
-                // Compound assignment — type-check the RHS
-                type_of(*asg->value);
             }
         } else {
-            // Complex target (field access, index access, etc.) — just
-            // resolve
+            // Complex target (field access, index access, etc.)
             resolve_expression(*asg->target);
+            resolve_expression(*asg->value);
         }
-
-        resolve_expression(*asg->value);
         return false;
     }
 
